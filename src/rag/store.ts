@@ -1,17 +1,26 @@
 /**
  * store.ts — Local vector storage with binary format
  *
- * Stores embeddings in binary (Float32Array) for space efficiency,
- * with chunk metadata in a separate JSON file.
+ * Stores embeddings in binary (Float32Array) for space efficiency.
+ * Chunk metadata is sharded into multiple JSON files to avoid giant single-file chunks.
  *
  * Storage layout:
  *   ~/Library/CloudStorage/Dropbox/bibliography/ (default, configurable)
- *   ├── vectors.bin     # Binary: contiguous Float32 arrays
- *   ├── chunks.json     # JSON: chunk metadata (text, uuid, docName, etc.)
- *   └── meta.json       # JSON: index-level metadata (dimensions, document tracking)
+ *   ├── vectors.bin          # Binary: contiguous Float32 arrays
+ *   ├── chunks.json          # Chunk shard manifest
+ *   ├── chunks.001.json      # Chunk metadata shard
+ *   ├── chunks.002.json      # Chunk metadata shard
+ *   └── meta.json            # Index-level metadata
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 
@@ -79,6 +88,18 @@ export interface IndexMeta {
   >;
 }
 
+interface ChunkShardEntry {
+  file: string;
+  count: number;
+}
+
+interface ChunkManifest {
+  version: 2;
+  totalChunks: number;
+  shardSize: number;
+  shards: ChunkShardEntry[];
+}
+
 export interface SearchResult {
   uuid: string;
   docName: string;
@@ -90,6 +111,8 @@ export interface SearchResult {
 }
 
 // ─── VectorStore ─────────────────────────────────────────
+
+const CHUNK_SHARD_SIZE = Number(process.env.CHUNK_SHARD_SIZE) || 25_000;
 
 export class VectorStore {
   private chunks: ChunkMeta[] = [];
@@ -124,7 +147,22 @@ export class VectorStore {
       this.dimensions = this.meta.dimensions;
 
       if (existsSync(this.paths.chunksPath)) {
-        this.chunks = JSON.parse(readFileSync(this.paths.chunksPath, "utf-8"));
+        const manifest = JSON.parse(
+          readFileSync(this.paths.chunksPath, "utf-8"),
+        ) as ChunkManifest;
+        if (manifest.version !== 2 || !Array.isArray(manifest.shards)) {
+          throw new Error("Unsupported chunks.json format (expected version 2)");
+        }
+        const loadedChunks: ChunkMeta[] = [];
+        for (const shard of manifest.shards) {
+          const shardPath = resolve(this.paths.indexDir, shard.file);
+          if (!existsSync(shardPath)) {
+            throw new Error(`Missing chunk shard file: ${shard.file}`);
+          }
+          const chunkPart = JSON.parse(readFileSync(shardPath, "utf-8")) as ChunkMeta[];
+          loadedChunks.push(...chunkPart);
+        }
+        this.chunks = loadedChunks;
       }
 
       if (existsSync(this.paths.vectorsPath)) {
@@ -157,8 +195,34 @@ export class VectorStore {
     const usedBytes = this.vectorsUsed * Float32Array.BYTES_PER_ELEMENT;
     writeFileSync(this.paths.vectorsPath, Buffer.from(this.vectors.buffer, 0, usedBytes));
 
-    // Write chunks as JSON (no vectors — they're in the binary file)
-    writeFileSync(this.paths.chunksPath, JSON.stringify(this.chunks));
+    const shardFiles: string[] = [];
+    for (const file of readdirSync(this.paths.indexDir)) {
+      if (/^chunks\.\d+\.json$/.test(file)) {
+        shardFiles.push(file);
+      }
+    }
+    for (const file of shardFiles) {
+      unlinkSync(resolve(this.paths.indexDir, file));
+    }
+
+    const shardSize = Math.max(1, CHUNK_SHARD_SIZE);
+    const totalShards = Math.max(1, Math.ceil(this.chunks.length / shardSize));
+    const padWidth = Math.max(3, String(totalShards).length);
+    const shards: ChunkShardEntry[] = [];
+    for (let start = 0, idx = 0; start < this.chunks.length; start += shardSize, idx++) {
+      const chunkPart = this.chunks.slice(start, start + shardSize);
+      const file = `chunks.${String(idx + 1).padStart(padWidth, "0")}.json`;
+      writeFileSync(resolve(this.paths.indexDir, file), JSON.stringify(chunkPart));
+      shards.push({ file, count: chunkPart.length });
+    }
+
+    const manifest: ChunkManifest = {
+      version: 2,
+      totalChunks: this.chunks.length,
+      shardSize,
+      shards,
+    };
+    writeFileSync(this.paths.chunksPath, JSON.stringify(manifest, null, 2));
 
     // Write meta as formatted JSON
     writeFileSync(this.paths.metaPath, JSON.stringify(this.meta, null, 2));

@@ -29,6 +29,8 @@ export interface IndexOptions {
   excludeMarkdown?: boolean;
   /** Optional bibliography JSON path for path->citation key mapping */
   bibliographyPath?: string;
+  /** Max chars read per document before chunking (0 or negative means no truncation) */
+  contentMaxLength?: number;
   /** Force full rebuild (ignore modification dates) */
   force?: boolean;
   /** Progress callback for UI updates */
@@ -54,8 +56,8 @@ interface RecordContent {
 
 // ─── Configuration ───────────────────────────────────────
 
-/** Max characters to read per document for indexing */
-const INDEX_CONTENT_MAX_LENGTH = 32000;
+/** Default max characters to read per document for indexing */
+const DEFAULT_INDEX_CONTENT_MAX_LENGTH = 32000;
 
 /** Number of chunks to embed in one API call (configurable via EMBED_BATCH_SIZE env var) */
 const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 50;
@@ -89,11 +91,13 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
     indexDir,
     excludeMarkdown = false,
     bibliographyPath,
+    contentMaxLength,
     force,
     onProgress,
   } = options;
   const startTime = Date.now();
   const progress = onProgress || (() => {});
+  const effectiveContentMaxLength = resolveContentMaxLength(contentMaxLength);
 
   // 1. Initialize embedder
   const embedder = getEmbedder();
@@ -270,7 +274,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
       // Read document content
       const raw = (await dt.getRecordContent(
         record.uuid,
-        INDEX_CONTENT_MAX_LENGTH,
+        effectiveContentMaxLength,
       )) as RecordContent;
 
       if (!raw || raw.error || !raw.content || raw.content.length < 50) {
@@ -364,6 +368,18 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
     errors,
     durationMs,
   };
+}
+
+function resolveContentMaxLength(input?: number): number | undefined {
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || input <= 0) return undefined;
+    return Math.floor(input);
+  }
+  const fromEnv = Number(process.env.CONTENT_MAX_LENGTH);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) {
+    return Math.floor(fromEnv);
+  }
+  return DEFAULT_INDEX_CONTENT_MAX_LENGTH;
 }
 
 // ─── Helpers ─────────────────────────────────────────────

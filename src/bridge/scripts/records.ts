@@ -12,11 +12,15 @@ import { escapeForJXA } from "../executor.js";
  * - PDF / Word / PPT / other → plainText()
  * - Image → returns file path and metadata (cannot extract text content)
  */
-export function getRecordContentScript(uuid: string, maxLength: number = 16000): string {
+export function getRecordContentScript(uuid: string, maxLength?: number): string {
   const u = escapeForJXA(uuid);
+  const isLimited =
+    typeof maxLength === "number" && Number.isFinite(maxLength) && maxLength > 0;
+  const maxLen = isLimited ? String(Math.floor(maxLength)) : "null";
   return `(() => {
   ObjC.import("Foundation");
   const app = Application("DEVONthink");
+  const maxLength = ${maxLen};
   const r = app.getRecordWithUuid(${u});
   if (!r) return JSON.stringify({error: "Record not found"});
 
@@ -82,8 +86,8 @@ export function getRecordContentScript(uuid: string, maxLength: number = 16000):
   }
 
   const totalLength = content.length;
-  const truncated = totalLength > ${maxLength};
-  const output = truncated ? content.slice(0, ${maxLength}) : content;
+  const truncated = maxLength ? totalLength > maxLength : false;
+  const output = truncated ? content.slice(0, maxLength) : content;
 
   let filePath = "";
   try { filePath = r.path() || ""; } catch(e) {}

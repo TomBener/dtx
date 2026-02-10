@@ -137,7 +137,7 @@ function printHelp(): void {
   dt groups list [--uuid <groupUuid>] [--limit <n>]
   dt records search --query "<q>" [--database <name>] [--limit <n>]
   dt records get --uuid <recordUuid> [--max-length <n>]
-  dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>]
+  dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
   dt index status [--index-dir <path>]
   dt search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
   dt search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
@@ -147,6 +147,7 @@ Notes:
   - Progress logs are emitted on stderr
   - Default group for "dt index build": ${DEFAULT_GROUP_UUID}
   - Markdown files are excluded by default; use --include-md to include them
+  - content-max-length default: 32000 chars (set 0 to disable truncation)
   - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography
 `);
 }
@@ -205,6 +206,7 @@ async function run(): Promise<never> {
     // ─── index build/status ───
     if (namespace === "index" && action === "build") {
       const includeMd = getBoolFlag(parsed.flags, "include-md");
+      const contentMaxLength = getNumberFlag(parsed.flags, "content-max-length");
 
       const indexDir = toIndexDir(parsed.flags);
       const stats = await buildIndex({
@@ -214,6 +216,7 @@ async function run(): Promise<never> {
         excludeMarkdown: !includeMd,
         force: getBoolFlag(parsed.flags, "force"),
         indexDir,
+        contentMaxLength,
         onProgress: (msg) => console.error(msg),
       });
       resetStoreCache(indexDir);

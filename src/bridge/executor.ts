@@ -32,10 +32,11 @@ export async function runJXA(
     if (e.killed) {
       throw new Error(
         `JXA script timed out (${timeout}ms). DEVONthink may be unresponsive.`,
+        { cause: err },
       );
     }
     const detail = e.stderr?.trim() || e.message;
-    throw new Error(`JXA execution failed: ${detail}`);
+    throw new Error(`JXA execution failed: ${detail}`, { cause: err });
   }
 }
 

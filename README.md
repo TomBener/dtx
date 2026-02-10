@@ -77,7 +77,7 @@ dt groups list [--uuid <groupUuid>] [--limit <n>]
 dt records search --query "<q>" [--database <name>] [--limit <n>]
 dt records get --uuid <recordUuid> [--max-length <n>]
 
-dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>]
+dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
 dt index status [--index-dir <path>]
 
 dt search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
@@ -97,6 +97,7 @@ Index files:
 - `vectors.bin`
 - `chunks.json`
 - `meta.json`
+- `chunks.001.json`, `chunks.002.json`, ... (auto-generated chunk shards)
 
 ## Example: Group-Scoped Index with Citation Keys
 
@@ -111,6 +112,7 @@ Defaults for `dt index build`:
 
 - Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA`
 - Markdown files are excluded unless `--include-md` is provided
+- `--content-max-length` default is `32000` chars (`0` means no truncation)
 
 ## Configuration (Environment Variables)
 
@@ -124,6 +126,7 @@ Set env vars in your shell/profile (or pass inline per command). Important ones:
 - `DT_INDEX_DIR`
 - `LIST_ALL_RECORDS_TIMEOUT_MS`
 - `INDEX_CRAWL_HEARTBEAT_MS`
+- `CHUNK_SHARD_SIZE`
 
 `dt` does not read `.env` files automatically.
 
