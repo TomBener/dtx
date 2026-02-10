@@ -1,0 +1,51 @@
+name: Build And Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate code
+        run: npm run check
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Build release assets
+        run: |
+          npm pack
+          PKG="$(ls -1 dt-agent-cli-*.tgz | head -n 1)"
+          VERSION="${GITHUB_REF_NAME#v}"
+          DIST_ARCHIVE="dt-agent-cli-${VERSION}-dist.tar.gz"
+          tar -czf "${DIST_ARCHIVE}" dist package.json README.md
+          shasum -a 256 "${PKG}" "${DIST_ARCHIVE}" > SHA256SUMS.txt
+          echo "NPM_TARBALL=${PKG}" >> "${GITHUB_ENV}"
+          echo "DIST_ARCHIVE=${DIST_ARCHIVE}" >> "${GITHUB_ENV}"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ env.NPM_TARBALL }}
+            ${{ env.DIST_ARCHIVE }}
+            SHA256SUMS.txt
