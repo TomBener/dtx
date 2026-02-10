@@ -39,12 +39,6 @@ npm run build
 npm link
 ```
 
-After linking, use:
-
-```bash
-dt help
-```
-
 ## Output Contract
 
 - `stdout`: JSON response
