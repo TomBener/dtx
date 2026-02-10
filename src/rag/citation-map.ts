@@ -60,15 +60,17 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
 
   for (const item of items) {
     const citationKey = (item.id || "").trim();
-    const filePath = (item.file || "").trim();
-    if (!citationKey || !filePath) {
+    const filePaths = splitBibliographyFilePaths(item.file);
+    if (!citationKey || filePaths.length === 0) {
       skipped++;
       continue;
     }
 
-    const normalized = normalizePathForLookup(filePath);
-    map.set(normalized, citationKey);
-    map.set(normalized.toLowerCase(), citationKey);
+    for (const filePath of filePaths) {
+      const normalized = normalizePathForLookup(filePath);
+      map.set(normalized, citationKey);
+      map.set(normalized.toLowerCase(), citationKey);
+    }
   }
 
   return {
@@ -109,4 +111,14 @@ function extractBibliographyItems(parsed: unknown): BibliographyItem[] {
   }
 
   return [];
+}
+
+/** Parse bibliography "file" field into one or more paths (semicolon-separated). */
+function splitBibliographyFilePaths(file: string | undefined): string[] {
+  const raw = (file || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
 }
