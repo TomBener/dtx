@@ -1,5 +1,7 @@
 # DEVONthink Agent CLI
 
+[![Build And Release](https://github.com/TomBener/dt-agent-cli/actions/workflows/release.yml/badge.svg)](https://github.com/TomBener/dt-agent-cli/actions/workflows/release.yml)
+
 Non-interactive, agent-friendly CLI for read-only DEVONthink access with optional semantic indexing and citation-key mapping.
 
 ## Key Features
@@ -16,6 +18,18 @@ Non-interactive, agent-friendly CLI for read-only DEVONthink access with optiona
 - Node.js 20+
 - Gemini or OpenAI key for embedding/index commands
 - `databases/groups/records` commands do not require embedding API keys
+
+## Install (Homebrew)
+
+```bash
+brew install tombener/tap/dt-agent-cli
+```
+
+Then run:
+
+```bash
+dt help
+```
 
 ## Quick Start
 
