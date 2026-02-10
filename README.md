@@ -1,4 +1,4 @@
-# DEVONthink CLI
+# DEVONthink Agent CLI
 
 Non-interactive, agent-friendly CLI for read-only DEVONthink access with optional semantic indexing and citation-key mapping.
 
@@ -96,7 +96,6 @@ Index files:
 dt index build \
   --database Inbox \
   --bib ~/Library/CloudStorage/Dropbox/bibliography/bibliography.json \
-  --force \
   --index-dir ~/Library/CloudStorage/Dropbox/bibliography
 ```
 
@@ -132,3 +131,7 @@ export DT_INDEX_DIR="$HOME/Library/CloudStorage/Dropbox/bibliography"
 ## Safety
 
 All DEVONthink operations are read-only.
+
+# License
+
+MIT License. See [LICENSE](LICENSE) for details.
