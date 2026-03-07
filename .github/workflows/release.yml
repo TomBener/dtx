@@ -33,9 +33,9 @@ jobs:
       - name: Build release assets
         run: |
           npm pack
-          PKG="$(ls -1 dt-agent-cli-*.tgz | head -n 1)"
+          PKG="$(ls -1 dtx-*.tgz | head -n 1)"
           VERSION="${GITHUB_REF_NAME#v}"
-          DIST_ARCHIVE="dt-agent-cli-${VERSION}-dist.tar.gz"
+          DIST_ARCHIVE="dtx-${VERSION}-dist.tar.gz"
           tar -czf "${DIST_ARCHIVE}" dist package.json README.md
           shasum -a 256 "${PKG}" "${DIST_ARCHIVE}" > SHA256SUMS.txt
           echo "NPM_TARBALL=${PKG}" >> "${GITHUB_ENV}"
