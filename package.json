@@ -1,7 +1,7 @@
 {
-  "name": "dt-agent-cli",
+  "name": "dtx",
   "version": "0.2.0",
-  "description": "Non-interactive dt CLI for DEVONthink indexing and semantic retrieval",
+  "description": "Non-interactive dtx CLI for DEVONthink indexing and semantic retrieval",
   "repository": {
     "type": "git",
     "url": "https://github.com/TomBener/dt-agent-cli.git"
@@ -11,7 +11,7 @@
     "node": ">=20.0.0"
   },
   "bin": {
-    "dt": "./dist/cli.js"
+    "dtx": "./dist/cli.js"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",

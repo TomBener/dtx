@@ -133,19 +133,19 @@ function emitError(
 
 function printHelp(): void {
   console.log(`Usage:
-  dt databases list
-  dt groups list [--uuid <groupUuid>] [--limit <n>]
-  dt records search --query "<q>" [--database <name>] [--limit <n>]
-  dt records get --uuid <recordUuid> [--max-length <n>]
-  dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
-  dt index status [--index-dir <path>]
-  dt search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
-  dt search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
+  dtx databases list
+  dtx groups list [--uuid <groupUuid>] [--limit <n>]
+  dtx records search --query "<q>" [--database <name>] [--limit <n>]
+  dtx records get --uuid <recordUuid> [--max-length <n>]
+  dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
+  dtx index status [--index-dir <path>]
+  dtx search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
+  dtx search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
 
 Notes:
   - Default output is JSON (stdout)
   - Progress logs are emitted on stderr
-  - Default group for "dt index build": ${DEFAULT_GROUP_UUID}
+  - Default group for "dtx index build": ${DEFAULT_GROUP_UUID}
   - Markdown files are excluded by default; use --include-md to include them
   - content-max-length default: 32000 chars (set 0 to disable truncation)
   - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography

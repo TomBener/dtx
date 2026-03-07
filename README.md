@@ -1,4 +1,4 @@
-# DEVONthink Agent CLI
+# dtx
 
 [![Build And Release](https://github.com/TomBener/dt-agent-cli/actions/workflows/release.yml/badge.svg)](https://github.com/TomBener/dt-agent-cli/actions/workflows/release.yml)
 
@@ -22,13 +22,13 @@ Non-interactive, agent-friendly CLI for read-only DEVONthink access with optiona
 ## Install (Homebrew)
 
 ```bash
-brew install tombener/tap/dt-agent-cli
+brew install tombener/tap/dtx
 ```
 
 Then run:
 
 ```bash
-dt help
+dtx help
 ```
 
 ## Quick Start
@@ -72,16 +72,16 @@ Error shape:
 ## Commands
 
 ```bash
-dt databases list
-dt groups list [--uuid <groupUuid>] [--limit <n>]
-dt records search --query "<q>" [--database <name>] [--limit <n>]
-dt records get --uuid <recordUuid> [--max-length <n>]
+dtx databases list
+dtx groups list [--uuid <groupUuid>] [--limit <n>]
+dtx records search --query "<q>" [--database <name>] [--limit <n>]
+dtx records get --uuid <recordUuid> [--max-length <n>]
 
-dt index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
-dt index status [--index-dir <path>]
+dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
+dtx index status [--index-dir <path>]
 
-dt search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
-dt search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
+dtx search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
+dtx search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
 ```
 
 ## Index Directory Configuration
@@ -102,13 +102,13 @@ Index files:
 ## Example: Group-Scoped Index with Citation Keys
 
 ```bash
-dt index build \
+dtx index build \
   --database Inbox \
   --bib ~/Library/CloudStorage/Dropbox/bibliography/bibliography.json \
   --index-dir ~/Library/CloudStorage/Dropbox/bibliography
 ```
 
-Defaults for `dt index build`:
+Defaults for `dtx index build`:
 
 - Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA`
 - Markdown files are excluded unless `--include-md` is provided
@@ -128,7 +128,7 @@ Set env vars in your shell/profile (or pass inline per command). Important ones:
 - `INDEX_CRAWL_HEARTBEAT_MS`
 - `CHUNK_SHARD_SIZE`
 
-`dt` does not read `.env` files automatically.
+`dtx` does not read `.env` files automatically.
 
 Example:
 

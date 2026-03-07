@@ -106,4 +106,4 @@ export function getRecordContentScript(uuid: string, maxLength?: number): string
 })()`;
 }
 
-// Note: The dt CLI only exposes read-only operations.
+// Note: The dtx CLI only exposes read-only operations.
