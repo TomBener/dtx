@@ -44,6 +44,7 @@ interface DocumentSearchResult {
 
 interface SearchDocumentOptions {
   bibliographyPath?: string;
+  includeAbstract?: boolean;
 }
 
 interface DocumentContentResult {
@@ -65,6 +66,7 @@ interface DocumentContentResult {
 function enrichWithBibliography<T extends { path?: string; citationKey?: string }>(
   result: T,
   bibliography: CitationMapLoadResult | null,
+  options: { includeAbstract?: boolean } = {},
 ): T & {
   citationKey?: string;
   author?: string;
@@ -83,7 +85,7 @@ function enrichWithBibliography<T extends { path?: string; citationKey?: string 
     citationKey: citationKey || metadata?.citationKey,
     author: metadata?.author,
     year: metadata?.year,
-    abstract: metadata?.abstract,
+    ...(options.includeAbstract ? { abstract: metadata?.abstract } : {}),
   };
 }
 
@@ -98,14 +100,20 @@ export async function searchDocuments(
   const results = await runJXAJSON<DocumentSearchResult[]>(searchScript(query, database, limit));
   const bibliography = loadCitationMap(options.bibliographyPath);
 
-  return results.map((result) => enrichWithBibliography(result, bibliography));
+  return results.map((result) =>
+    enrichWithBibliography(result, bibliography, {
+      includeAbstract: options.includeAbstract,
+    }),
+  );
 }
 
 export async function getDocumentContent(uuid: string, maxLength?: number, bibliographyPath?: string) {
   // Support CONTENT_MAX_LENGTH env var for custom default truncation length
   const effectiveMax = maxLength ?? (Number(process.env.CONTENT_MAX_LENGTH) || undefined);
   const data = await runJXAJSON<DocumentContentResult>(getRecordContentScript(uuid, effectiveMax));
-  return enrichWithBibliography(data, loadCitationMap(bibliographyPath));
+  return enrichWithBibliography(data, loadCitationMap(bibliographyPath), {
+    includeAbstract: true,
+  });
 }
 
 export async function getDocumentContentByCitationKey(

@@ -46,7 +46,7 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 ### Search
 ```bash
 # DEVONthink native search — document-level, operators supported
-dtx search documents --query "<q>" [--database <name>] [--limit <n>]
+dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
 
 # Local index search — passage-level
 dtx search passages --query "<q>" \

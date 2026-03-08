@@ -131,7 +131,7 @@ function printHelp(): void {
   console.log(`Usage:
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
-  dtx search documents --query "<q>" [--database <name>] [--limit <n>]
+  dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
   dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
   dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -186,6 +186,7 @@ async function run(): Promise<never> {
       const database = getStringFlag(parsed.flags, "database");
       const limit = getNumberFlag(parsed.flags, "limit");
       const data = await dt.searchDocuments(query, database, limit, {
+        includeAbstract: getBoolFlag(parsed.flags, "with-abstract"),
       });
       emitOk(data, commonMeta());
     }

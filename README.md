@@ -74,7 +74,7 @@ Error shape:
 ```bash
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
-dtx search documents --query "<q>" [--database <name>] [--limit <n>]
+dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
 dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
 
 dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
@@ -91,7 +91,8 @@ There are two distinct search paths:
 **1. DEVONthink native search** (`dtx search documents`)
 Passes the query directly to DEVONthink's search engine and returns document-level results. Supports all DEVONthink search operators: `NEAR`, `AND`, `OR`, `NOT`, wildcards, field qualifiers (`name:`, `tag:`, etc.), and parentheses. Use this for coarse filtering or when you need operator-based queries.
 
-- Results now include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, `year`, and `abstract`
+- Results now include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, and `year`
+- Pass `--with-abstract` when you want abstracts included in document search results
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
 - Bibliographic enrichment is sourced from `bibliography.json`
 
