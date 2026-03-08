@@ -113,7 +113,7 @@ export interface SearchResult {
 
 // ─── VectorStore ─────────────────────────────────────────
 
-const CHUNK_SHARD_SIZE = Number(process.env.CHUNK_SHARD_SIZE) || 25_000;
+const CHUNK_SHARD_SIZE = Number(process.env.CHUNK_SHARD_SIZE) || 10_000;
 
 export class VectorStore {
   private chunks: ChunkMeta[] = [];
@@ -274,6 +274,16 @@ export class VectorStore {
       }
     }
     return undefined;
+  }
+
+  /** Get all stored chunks for a document. */
+  getChunksByUuid(uuid: string): ChunkMeta[] {
+    return this.chunks.filter((chunk) => chunk.uuid === uuid);
+  }
+
+  /** Get all stored chunks. */
+  getAllChunks(): ChunkMeta[] {
+    return [...this.chunks];
   }
 
   /** Get UUID set for documents that already have citation keys in index. */

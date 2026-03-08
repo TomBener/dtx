@@ -7,7 +7,7 @@ An agent-friendly CLI for read-only DEVONthink access with optional semantic ind
 ## Key Features
 
 - Read-only DEVONthink operations (search/read/browse)
-- Document search, keyword-first passage search, and related-document lookup
+- Document search, keyword passage search, semantic passage search, and related-document lookup
 - Citation key mapping via bibliography JSON (`file -> id`)
 - Default JSON output for easy AI-agent integration
 - Configurable index directory per command (`--index-dir`)
@@ -84,6 +84,47 @@ dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [-
 dtx index status [--index-dir <path>]
 ```
 
+## Search Modes
+
+- `dtx search documents`
+  Uses DEVONthink native keyword search and returns document-level results.
+- `dtx search passages --mode keyword`
+  Returns passage-level results using lexical matching. If an index is available, it searches indexed chunks directly; otherwise it falls back to DEVONthink document search plus local passage extraction.
+- `dtx search passages --mode semantic`
+  Returns passage-level results using query embeddings against the local vector index.
+- `dtx documents related`
+  Uses DEVONthink `See Also` / `compare()` and returns related documents for one known UUID.
+
+Only `search passages --mode semantic` requires an embedding API key at query time.
+
+```mermaid
+flowchart TD
+    Q["Query / UUID"] --> D["search documents"]
+    D --> D1["DEVONthink native search"]
+    D1 --> D2["Document results"]
+
+    Q --> PK["search passages (keyword)"]
+    PK --> PK1{"Local index available?"}
+    PK1 -->|Yes| PK2["Scan indexed chunks\nwith lexical matching"]
+    PK1 -->|No| PK3["DEVONthink document search"]
+    PK3 --> PK4["Read candidate documents"]
+    PK2 --> PK5["Rank passages"]
+    PK4 --> PK5
+    PK5 --> PK6["Deduplicate / merge adjacent passages / build excerpt"]
+    PK6 --> PK7["Passage results"]
+
+    Q --> PS["search passages (semantic)"]
+    PS --> PS1["Embed query"]
+    PS1 --> PS2["Vector search over local index"]
+    PS2 --> PS3["Rank passages"]
+    PS3 --> PS4["Deduplicate / merge adjacent passages / build excerpt"]
+    PS4 --> PS5["Passage results"]
+
+    Q --> R["documents related"]
+    R --> R1["DEVONthink compare / See Also"]
+    R1 --> R2["Related document results"]
+```
+
 ## Index Directory Configuration
 
 Priority order:
@@ -114,12 +155,13 @@ Defaults for `dtx index build`:
 - Markdown files are excluded unless `--include-md` is provided
 - `--content-max-length` defaults to no truncation (`0` also means no truncation)
 - Semantic chunking defaults to `800` chars with `120` chars of overlap
+- Chunk metadata shard size defaults to `10000`
 
 `dtx search passages` defaults to `--mode keyword`:
 
-- It uses DEVONthink keyword search to retrieve candidate documents
-- Then extracts and ranks matching passages locally
-- If an index is available, passage search is scoped to the indexed document set and can use citation keys from the index
+- If an index is available, it scans indexed chunks directly with lexical matching
+- If no index is available, it falls back to DEVONthink document search and then extracts passages locally
+- Results are post-processed into short excerpts, with adjacent hits merged and per-document deduplication
 - Use `--mode semantic` to query the local vector index instead
 
 ## Configuration (Environment Variables)

@@ -16,7 +16,6 @@ const storeCache = new Map<string, VectorStore>();
 
 const DEFAULT_PASSAGE_MODE: PassageSearchMode = "keyword";
 const DEFAULT_DOCUMENT_CANDIDATES = 20;
-const DEFAULT_LOCAL_SCOPE_SCAN_LIMIT = 200;
 const DEFAULT_PASSAGES_PER_DOCUMENT = 1;
 const DEFAULT_MAX_MERGED_PASSAGES = 2;
 const DEFAULT_PASSAGE_MAX_CHARS = 700;
@@ -124,18 +123,15 @@ async function searchKeywordPassages(
   database: string | undefined,
   store: VectorStore | null,
 ): Promise<PassageSearchResult[]> {
-  const scopeUuids = store ? new Set(Object.keys(store.getMeta().documents)) : null;
-  let documentCandidates = await collectKeywordDocuments(query, database, limit, scopeUuids);
-  if (documentCandidates.length === 0 && store && scopeUuids) {
-    documentCandidates = await collectScopedFallbackDocuments(query, store, scopeUuids);
+  if (store) {
+    return searchIndexedKeywordPassages(query, limit, database, store);
   }
+
+  const documentCandidates = await collectKeywordDocuments(query, database, limit, null);
   const candidatePassages: CandidatePassage[] = [];
 
   for (const doc of documentCandidates) {
-    const raw = (await dt.getDocumentContent(doc.uuid)) as { content?: string; error?: string };
-    if (!raw || raw.error || !raw.content) continue;
-
-    const units = splitIntoPassageUnits(raw.content);
+    const units = await getPassageUnitsForDocument(doc.uuid, null);
     if (units.length === 0) continue;
 
     for (const unit of units) {
@@ -169,33 +165,77 @@ async function searchKeywordPassages(
   return postProcessPassages(query, candidatePassages, limit, "keyword");
 }
 
-async function collectScopedFallbackDocuments(
+function searchIndexedKeywordPassages(
   query: string,
+  limit: number,
+  database: string | undefined,
   store: VectorStore,
-  scopeUuids: Set<string>,
-): Promise<DocumentCandidate[]> {
-  const uuids = [...scopeUuids].slice(0, DEFAULT_LOCAL_SCOPE_SCAN_LIMIT);
-  const docs: DocumentCandidate[] = [];
+): PassageSearchResult[] {
+  const candidatePassages: CandidatePassage[] = [];
+  const documentBestScores = new Map<string, number>();
+  const titleScores = new Map<string, number>();
 
-  for (const uuid of uuids) {
-    const raw = (await dt.getDocumentContent(uuid)) as { name?: string; content?: string; error?: string };
-    if (!raw || raw.error || !raw.content) continue;
+  for (const chunk of store.getAllChunks()) {
+    if (database && chunk.database !== database) continue;
 
-    const titleScore = computeKeywordSignals(query, raw.name || "").score;
-    const contentScore = computeKeywordSignals(query, raw.content).score;
-    const documentScore = Math.max(titleScore, contentScore * 0.9);
-    if (documentScore <= 0) continue;
+    const titleScore =
+      titleScores.get(chunk.uuid) ?? computeKeywordSignals(query, chunk.docName).score;
+    titleScores.set(chunk.uuid, titleScore);
 
-    docs.push({
-      uuid,
-      docName: raw.name || store.getMeta().documents[uuid]?.name || uuid,
-      database: store.getDatabaseByUuid(uuid) || "",
-      documentScore,
-      citationKey: store.getCitationKeyByUuid(uuid),
+    const lexical = computeKeywordSignals(query, chunk.text);
+    const documentScore = Math.max(titleScore * 0.7, lexical.score);
+    const previous = documentBestScores.get(chunk.uuid) || 0;
+    if (documentScore > previous) {
+      documentBestScores.set(chunk.uuid, documentScore);
+    }
+
+    if (lexical.score <= 0) continue;
+
+    candidatePassages.push({
+      uuid: chunk.uuid,
+      docName: chunk.docName,
+      database: chunk.database,
+      text: chunk.text,
+      passageIndex: chunk.chunkIndex,
+      passageIndexStart: chunk.chunkIndex,
+      passageIndexEnd: chunk.chunkIndex,
+      mergedPassageCount: 1,
+      score: 0,
+      documentScore: 0,
+      passageScore: lexical.score,
+      citationKey: chunk.citationKey,
+      mode: "keyword",
+      hasDirectMatch: lexical.hasDirectMatch,
     });
   }
 
-  return docs.sort((a, b) => b.documentScore - a.documentScore);
+  for (const candidate of candidatePassages) {
+    const documentScore = documentBestScores.get(candidate.uuid) || candidate.passageScore;
+    candidate.documentScore = documentScore;
+    candidate.score = Math.min(1, candidate.passageScore + documentScore * 0.18);
+  }
+
+  candidatePassages.sort((a, b) => b.score - a.score);
+  return postProcessPassages(query, candidatePassages, limit, "keyword");
+}
+
+async function getPassageUnitsForDocument(
+  uuid: string,
+  store: VectorStore | null,
+): Promise<PassageUnit[]> {
+  if (store) {
+    const chunks = store.getChunksByUuid(uuid);
+    if (chunks.length > 0) {
+      return chunks.map((chunk) => ({
+        passageIndex: chunk.chunkIndex,
+        text: chunk.text,
+      }));
+    }
+  }
+
+  const raw = (await dt.getDocumentContent(uuid)) as { content?: string; error?: string };
+  if (!raw || raw.error || !raw.content) return [];
+  return splitIntoPassageUnits(raw.content);
 }
 
 async function searchSemanticPassages(
@@ -590,6 +630,11 @@ function createExcerpt(text: string, query: string): string {
   if (text.length <= target) return text.trim();
 
   const match = findBestMatch(text, query);
+  if (match) {
+    const sentenceExcerpt = createSentenceExcerpt(text, match.index, target);
+    if (sentenceExcerpt) return sentenceExcerpt;
+  }
+
   const halfWindow = Math.floor(target / 2);
 
   let start = 0;
@@ -612,6 +657,61 @@ function createExcerpt(text: string, query: string): string {
   if (start > 0) excerpt = `...${excerpt}`;
   if (end < text.length) excerpt = `${excerpt}...`;
   return excerpt;
+}
+
+function createSentenceExcerpt(
+  text: string,
+  matchIndex: number,
+  target: number,
+): string | null {
+  const sentences = splitSentencesWithOffsets(text);
+  if (sentences.length === 0) return null;
+
+  const currentIndex = sentences.findIndex(
+    (sentence) => matchIndex >= sentence.start && matchIndex < sentence.end,
+  );
+  if (currentIndex < 0) return null;
+
+  const parts = [sentences[currentIndex].text.trim()];
+  let start = sentences[currentIndex].start;
+  let end = sentences[currentIndex].end;
+
+  if (
+    parts[0].length < target * 0.55 &&
+    currentIndex + 1 < sentences.length &&
+    parts[0].length + sentences[currentIndex + 1].text.length <= target * 1.2
+  ) {
+    parts.push(sentences[currentIndex + 1].text.trim());
+    end = sentences[currentIndex + 1].end;
+  }
+
+  if (
+    parts.join(" ").length < target * 0.45 &&
+    currentIndex > 0 &&
+    sentences[currentIndex - 1].text.length + parts.join(" ").length <= target * 1.2
+  ) {
+    parts.unshift(sentences[currentIndex - 1].text.trim());
+    start = sentences[currentIndex - 1].start;
+  }
+
+  let excerpt = parts.join(" ").replace(/\s+/g, " ").trim();
+  if (start > 0) excerpt = `...${excerpt}`;
+  if (end < text.length) excerpt = `${excerpt}...`;
+  return excerpt;
+}
+
+function splitSentencesWithOffsets(text: string): Array<{ text: string; start: number; end: number }> {
+  const out: Array<{ text: string; start: number; end: number }> = [];
+  const pattern = /[^。！？.!?;\n]+[。！？.!?;\n]?/gu;
+  for (const match of text.matchAll(pattern)) {
+    const sentence = match[0];
+    const start = match.index ?? 0;
+    const end = start + sentence.length;
+    if (sentence.trim()) {
+      out.push({ text: sentence, start, end });
+    }
+  }
+  return out;
 }
 
 function findBestMatch(text: string, query: string): { index: number; length: number } | null {
