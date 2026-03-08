@@ -152,6 +152,8 @@ dtx index build \
 Defaults for `dtx index build`:
 
 - Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA`
+- Database: all databases (omit `--database` to scan all)
+- Bibliography path: `~/Library/CloudStorage/Dropbox/bibliography/bibliography.json` (or `BIBLIOGRAPHY_JSON_PATH` env)
 - Markdown files are excluded unless `--include-md` is provided
 - `--content-max-length` defaults to no truncation (`0` also means no truncation)
 - Semantic chunking defaults to `800` chars with `120` chars of overlap
