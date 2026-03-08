@@ -253,7 +253,10 @@ async function run(): Promise<never> {
       const indexDir = toIndexDir(parsed.flags);
       const mode = getStringFlag(parsed.flags, "mode");
       if (mode && mode !== "keyword" && mode !== "semantic") {
-        emitError("INVALID_ARGUMENT", 'Invalid --mode. Expected "keyword" or "semantic".');
+        emitError(
+          "INVALID_ARGUMENT",
+          'Invalid --mode. Expected "keyword" or "semantic".',
+        );
       }
       const data = await searchPassages(query, limit, {
         database: getStringFlag(parsed.flags, "database"),

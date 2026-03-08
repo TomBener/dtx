@@ -139,7 +139,13 @@ export async function searchPassages(
     };
   }
 
-  const results = await searchKeywordPassages(query, limit, options.database, store, perDocLimit);
+  const results = await searchKeywordPassages(
+    query,
+    limit,
+    options.database,
+    store,
+    perDocLimit,
+  );
   return {
     results: toPublicPassageResults(results, includeContext, debug),
     indexAvailable,
@@ -245,7 +251,8 @@ function searchIndexedKeywordPassages(
   }
 
   for (const candidate of candidatePassages) {
-    const documentScore = documentBestScores.get(candidate.uuid) || candidate.passageScore;
+    const documentScore =
+      documentBestScores.get(candidate.uuid) || candidate.passageScore;
     candidate.documentScore = documentScore;
     candidate.score = Math.min(1, candidate.passageScore + documentScore * 0.18);
   }
@@ -620,7 +627,10 @@ function mergeAdjacentPassages(
     mode === "semantic" ? DEFAULT_CHUNK_OVERLAP_CHARS : 0,
   );
   const excerpt = createExcerpt(mergedText, query);
-  const best = pieces.reduce((acc, cur) => (cur.score > acc.score ? cur : acc), pieces[0]);
+  const best = pieces.reduce(
+    (acc, cur) => (cur.score > acc.score ? cur : acc),
+    pieces[0],
+  );
 
   return {
     uuid: best.uuid,
@@ -641,7 +651,10 @@ function mergeAdjacentPassages(
   };
 }
 
-function shouldMergePassage(seed: CandidatePassage, candidate: CandidatePassage): boolean {
+function shouldMergePassage(
+  seed: CandidatePassage,
+  candidate: CandidatePassage,
+): boolean {
   const scoreCloseEnough = seed.score - candidate.score <= MERGE_SCORE_GAP;
   return scoreCloseEnough || candidate.hasDirectMatch;
 }
@@ -744,7 +757,9 @@ function createSentenceExcerpt(
   return excerpt;
 }
 
-function splitSentencesWithOffsets(text: string): Array<{ text: string; start: number; end: number }> {
+function splitSentencesWithOffsets(
+  text: string,
+): Array<{ text: string; start: number; end: number }> {
   const out: Array<{ text: string; start: number; end: number }> = [];
   const pattern = /[^。！？.!?;\n]+[。！？.!?;\n]?/gu;
   for (const match of text.matchAll(pattern)) {
@@ -758,9 +773,14 @@ function splitSentencesWithOffsets(text: string): Array<{ text: string; start: n
   return out;
 }
 
-function findBestMatch(text: string, query: string): { index: number; length: number } | null {
+function findBestMatch(
+  text: string,
+  query: string,
+): { index: number; length: number } | null {
   const normalizedText = normalizeForMatch(text);
-  const phrases = extractMatchPhrases(normalizeForMatch(query)).sort((a, b) => b.length - a.length);
+  const phrases = extractMatchPhrases(normalizeForMatch(query)).sort(
+    (a, b) => b.length - a.length,
+  );
 
   for (const phrase of phrases) {
     const idx = normalizedText.indexOf(phrase);
@@ -857,7 +877,8 @@ function getOrCreateSet(map: Map<string, Set<number>>, key: string): Set<number>
 }
 
 function normalizePerDocLimit(input?: number): number | undefined {
-  if (typeof input !== "number" || !Number.isFinite(input) || input <= 0) return undefined;
+  if (typeof input !== "number" || !Number.isFinite(input) || input <= 0)
+    return undefined;
   return Math.floor(input);
 }
 
