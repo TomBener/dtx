@@ -87,11 +87,11 @@ dtx index status [--index-dir <path>]
 ## Search Modes
 
 - `dtx search documents`
-  Uses DEVONthink native keyword search and returns document-level results.
-- `dtx search passages --mode keyword`
-  Returns passage-level results using lexical matching. If an index is available, it searches indexed chunks directly; otherwise it falls back to DEVONthink document search plus local passage extraction.
+  Uses DEVONthink native keyword search and returns document-level results. Supports advanced operators such as `NEAR`, `AND`, `OR`, `NOT`, wildcards, and field qualifiers (e.g. `name:`, `tag:`), since the query is passed directly to DEVONthink's search engine.
+- `dtx search passages --mode keyword` (default)
+  Returns passage-level results using lexical matching. If a local index is available, it scans indexed chunks directly; otherwise it falls back to DEVONthink document search followed by local passage extraction and scoring.
 - `dtx search passages --mode semantic`
-  Returns passage-level results using query embeddings against the local vector index.
+  Embeds the query and performs cosine similarity search over the local vector index, then re-ranks results with lexical signals.
 - `dtx documents related`
   Uses DEVONthink `See Also` / `compare()` and returns related documents for one known UUID.
 
@@ -100,25 +100,25 @@ Only `search passages --mode semantic` requires an embedding API key at query ti
 ```mermaid
 flowchart TD
     Q["Query / UUID"] --> D["search documents"]
-    D --> D1["DEVONthink native search"]
+    D --> D1["DEVONthink native search\n(supports NEAR / Boolean / wildcards)"]
     D1 --> D2["Document results"]
 
     Q --> PK["search passages (keyword)"]
     PK --> PK1{"Local index available?"}
     PK1 -->|Yes| PK2["Scan indexed chunks\nwith lexical matching"]
     PK1 -->|No| PK3["DEVONthink document search"]
-    PK3 --> PK4["Read candidate documents"]
-    PK2 --> PK5["Rank passages"]
+    PK3 --> PK4["Read & split candidate documents\ninto passage units"]
+    PK2 --> PK5["Score & rank passages"]
     PK4 --> PK5
-    PK5 --> PK6["Deduplicate / merge adjacent passages / build excerpt"]
-    PK6 --> PK7["Passage results"]
+    PK5 --> PP
 
     Q --> PS["search passages (semantic)"]
     PS --> PS1["Embed query"]
-    PS1 --> PS2["Vector search over local index"]
-    PS2 --> PS3["Rank passages"]
-    PS3 --> PS4["Deduplicate / merge adjacent passages / build excerpt"]
-    PS4 --> PS5["Passage results"]
+    PS1 --> PS2["Cosine similarity search\nover local vector index"]
+    PS2 --> PS3["Re-rank with lexical signals"]
+    PS3 --> PP
+
+    PP["Merge adjacent passages\n& build excerpt"] --> PR["Passage results"]
 
     Q --> R["documents related"]
     R --> R1["DEVONthink compare / See Also"]
@@ -140,7 +140,7 @@ Index files:
 - `meta.json`
 - `chunks.001.json`, `chunks.002.json`, ... (auto-generated chunk shards)
 
-## Example: Group-Scoped Index with Citation Keys
+## Example: Database-Scoped Index with Citation Keys
 
 ```bash
 dtx index build \
