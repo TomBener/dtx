@@ -5,7 +5,7 @@
  * Chunk metadata is sharded into multiple JSON files to avoid giant single-file chunks.
  *
  * Storage layout:
- *   ~/Library/CloudStorage/Dropbox/bibliography/ (default, configurable)
+ *   ~/Library/CloudStorage/Dropbox/bibliography/dtx-index/ (default, configurable)
  *   ├── vectors.bin          # Binary: contiguous Float32 arrays
  *   ├── chunks.json          # Chunk shard manifest
  *   ├── chunks.001.json      # Chunk metadata shard
@@ -32,6 +32,7 @@ const DEFAULT_INDEX_DIR = resolve(
   "CloudStorage",
   "Dropbox",
   "bibliography",
+  "dtx-index",
 );
 
 interface IndexPaths {

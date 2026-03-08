@@ -31,14 +31,14 @@ export interface DocumentInput {
 
 // ─── Configuration ───────────────────────────────────────
 
-/** Target characters per chunk (~500 tokens) */
-const CHUNK_MAX_CHARS = 2000;
+/** Target characters per chunk for retrieval/evidence (~200 tokens by default) */
+const CHUNK_MAX_CHARS = getPositiveIntEnv("CHUNK_MAX_CHARS", 800);
 
-/** Overlap characters between adjacent chunks (~100 tokens) */
-const OVERLAP_CHARS = 400;
+/** Overlap characters between adjacent chunks to preserve cross-boundary context */
+const OVERLAP_CHARS = getPositiveIntEnv("CHUNK_OVERLAP_CHARS", 120);
 
 /** Minimum chunk length — skip very short chunks */
-const MIN_CHUNK_CHARS = 100;
+const MIN_CHUNK_CHARS = getPositiveIntEnv("CHUNK_MIN_CHARS", 100);
 
 // ─── Main Chunking Function ─────────────────────────────
 
@@ -75,6 +75,12 @@ export function chunkDocument(doc: DocumentInput): ChunkData[] {
 }
 
 // ─── Internal Helpers ────────────────────────────────────
+
+function getPositiveIntEnv(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.floor(raw);
+}
 
 /**
  * Split text into chunks at paragraph boundaries.

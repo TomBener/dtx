@@ -23,7 +23,7 @@ export interface IndexOptions {
   database?: string;
   /** Limit to a specific DEVONthink group UUID (recursive subtree) */
   groupUuid?: string;
-  /** Index directory path (default: ~/Library/CloudStorage/Dropbox/bibliography or DT_INDEX_DIR) */
+  /** Index directory path (default: ~/Library/CloudStorage/Dropbox/bibliography/dtx-index or DT_INDEX_DIR) */
   indexDir?: string;
   /** Exclude markdown/.md files from indexing */
   excludeMarkdown?: boolean;
@@ -46,7 +46,7 @@ export interface IndexStats {
   durationMs: number;
 }
 
-/** Content returned by DEVONthink getRecordContent JXA */
+/** Content returned by DEVONthink getDocumentContent JXA */
 interface RecordContent {
   uuid?: string;
   name?: string;
@@ -56,8 +56,8 @@ interface RecordContent {
 
 // ─── Configuration ───────────────────────────────────────
 
-/** Default max characters to read per document for indexing */
-const DEFAULT_INDEX_CONTENT_MAX_LENGTH = 32000;
+/** Default max characters to read per document for indexing (undefined = no truncation) */
+const DEFAULT_INDEX_CONTENT_MAX_LENGTH: number | undefined = undefined;
 
 /** Number of chunks to embed in one API call (configurable via EMBED_BATCH_SIZE env var) */
 const EMBED_BATCH_SIZE = Number(process.env.EMBED_BATCH_SIZE) || 50;
@@ -272,7 +272,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
 
     try {
       // Read document content
-      const raw = (await dt.getRecordContent(
+      const raw = (await dt.getDocumentContent(
         record.uuid,
         effectiveContentMaxLength,
       )) as RecordContent;
