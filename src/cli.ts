@@ -133,7 +133,7 @@ function printHelp(): void {
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>]
   dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
-  dtx documents get --uuid <recordUuid> [--max-length <n>]
+  dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
   dtx index status [--index-dir <path>]
@@ -185,17 +185,35 @@ async function run(): Promise<never> {
       }
       const database = getStringFlag(parsed.flags, "database");
       const limit = getNumberFlag(parsed.flags, "limit");
-      const data = await dt.searchDocuments(query, database, limit);
+      const data = await dt.searchDocuments(query, database, limit, {
+      });
       emitOk(data, commonMeta());
     }
 
     // ─── documents get ───
     if (namespace === "documents" && action === "get") {
       const uuid = getStringFlag(parsed.flags, "uuid") || rest[0];
+      const citationKey = getStringFlag(parsed.flags, "citation-key");
+      if (uuid && citationKey) {
+        emitError(
+          "INVALID_ARGUMENT",
+          "Provide either --uuid <recordUuid> or --citation-key <key>, not both.",
+        );
+      }
+      if (!uuid && !citationKey) {
+        emitError(
+          "MISSING_ARGUMENT",
+          "Missing required argument: --uuid <recordUuid> or --citation-key <key>",
+        );
+      }
+      const maxLength = getNumberFlag(parsed.flags, "max-length");
+      if (citationKey) {
+        const data = await dt.getDocumentContentByCitationKey(citationKey, maxLength);
+        emitOk(data, commonMeta());
+      }
       if (!uuid) {
         emitError("MISSING_ARGUMENT", "Missing required argument: --uuid <recordUuid>");
       }
-      const maxLength = getNumberFlag(parsed.flags, "max-length");
       const data = await dt.getDocumentContent(uuid, maxLength);
       emitOk(data, commonMeta());
     }

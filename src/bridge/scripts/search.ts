@@ -6,7 +6,8 @@ import { escapeForJXA } from "../executor.js";
 
 /**
  * Generate a JXA script to search DEVONthink databases.
- * Returns JSON array [{uuid, name, score, recordType, tags, location, database, modificationDate}]
+ * Returns JSON array
+ * [{uuid, name, score, recordType, tags, location, database, modificationDate, path}]
  */
 export function searchScript(
   query: string,
@@ -45,6 +46,7 @@ export function searchScript(
       location: r.location(),
       database: r.database().name(),
       modificationDate: r.modificationDate().toISOString(),
+      path: r.path(),
     });
   }
   return JSON.stringify(out);

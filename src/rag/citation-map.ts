@@ -6,12 +6,29 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 interface BibliographyItem {
   id?: string;
   file?: string;
+  author?: Array<{
+    family?: string;
+    given?: string;
+    literal?: string;
+  }>;
+  issued?: {
+    "date-parts"?: unknown[];
+  };
+  abstract?: string;
+}
+
+export interface BibliographyMetadata {
+  citationKey: string;
+  author?: string;
+  year?: string;
+  abstract?: string;
 }
 
 export interface CitationMapLoadResult {
@@ -19,6 +36,9 @@ export interface CitationMapLoadResult {
   mapped: number;
   skipped: number;
   map: Map<string, string>;
+  metadataByPath: Map<string, BibliographyMetadata>;
+  metadataByCitationKey: Map<string, BibliographyMetadata>;
+  pathsByCitationKey: Map<string, string[]>;
 }
 
 /** Default bibliography path: ~/Library/CloudStorage/Dropbox/bibliography/bibliography.json */
@@ -56,6 +76,9 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
   const items = extractBibliographyItems(parsed);
 
   const map = new Map<string, string>();
+  const metadataByPath = new Map<string, BibliographyMetadata>();
+  const metadataByCitationKey = new Map<string, BibliographyMetadata>();
+  const pathsByCitationKey = new Map<string, string[]>();
   let skipped = 0;
 
   for (const item of items) {
@@ -68,8 +91,20 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
 
     for (const filePath of filePaths) {
       const normalized = normalizePathForLookup(filePath);
+      const metadata: BibliographyMetadata = {
+        citationKey,
+        author: formatAuthors(item.author),
+        year: extractYear(item.issued),
+        abstract: typeof item.abstract === "string" ? item.abstract.trim() || undefined : undefined,
+      };
       map.set(normalized, citationKey);
       map.set(normalized.toLowerCase(), citationKey);
+      metadataByPath.set(normalized, metadata);
+      metadataByPath.set(normalized.toLowerCase(), metadata);
+      const existingPaths = pathsByCitationKey.get(citationKey) ?? [];
+      existingPaths.push(normalized);
+      pathsByCitationKey.set(citationKey, existingPaths);
+      metadataByCitationKey.set(citationKey, metadata);
     }
   }
 
@@ -78,6 +113,9 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
     mapped: map.size / 2,
     skipped,
     map,
+    metadataByPath,
+    metadataByCitationKey,
+    pathsByCitationKey,
   };
 }
 
@@ -89,6 +127,37 @@ export function resolveCitationKey(
   if (!map || !recordPath) return undefined;
   const normalized = normalizePathForLookup(recordPath);
   return map.get(normalized) || map.get(normalized.toLowerCase());
+}
+
+export function getMetadataForPath(
+  metadataByPath: Map<string, BibliographyMetadata> | null,
+  recordPath?: string,
+): BibliographyMetadata | undefined {
+  if (!metadataByPath || !recordPath) return undefined;
+  const normalized = normalizePathForLookup(recordPath);
+  return metadataByPath.get(normalized) || metadataByPath.get(normalized.toLowerCase());
+}
+
+export function getMetadataForCitationKey(
+  metadataByCitationKey: Map<string, BibliographyMetadata> | null,
+  citationKey?: string,
+): BibliographyMetadata | undefined {
+  if (!metadataByCitationKey || !citationKey) return undefined;
+  return metadataByCitationKey.get(citationKey);
+}
+
+export function getPathsForCitationKey(
+  pathsByCitationKey: Map<string, string[]> | null,
+  citationKey?: string,
+): string[] {
+  if (!pathsByCitationKey || !citationKey) return [];
+  return pathsByCitationKey.get(citationKey) ?? [];
+}
+
+export function getRecordStemFromPath(recordPath: string): string {
+  const base = basename(recordPath);
+  const ext = extname(base);
+  return ext ? base.slice(0, -ext.length) : base;
 }
 
 function extractBibliographyItems(parsed: unknown): BibliographyItem[] {
@@ -121,4 +190,31 @@ function splitBibliographyFilePaths(file: string | undefined): string[] {
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+}
+
+function formatAuthors(
+  authors: Array<{ family?: string; given?: string; literal?: string }> | undefined,
+): string | undefined {
+  if (!Array.isArray(authors) || authors.length === 0) return undefined;
+  const names = authors
+    .map((author) => {
+      if (typeof author.literal === "string" && author.literal.trim()) {
+        return author.literal.trim();
+      }
+      const family = (author.family || "").trim();
+      const given = (author.given || "").trim();
+      if (family && given) return `${family}, ${given}`;
+      return family || given || "";
+    })
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? names.join("; ") : undefined;
+}
+
+function extractYear(issued: { "date-parts"?: unknown[] } | undefined): string | undefined {
+  const first = issued?.["date-parts"]?.[0];
+  if (!Array.isArray(first) || first.length === 0) return undefined;
+  const year = first[0];
+  if (typeof year === "string" && year.trim()) return year.trim();
+  if (typeof year === "number" && Number.isFinite(year)) return String(year);
+  return undefined;
 }

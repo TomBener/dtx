@@ -77,7 +77,7 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>]
 dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
 
-dtx documents get --uuid <recordUuid> [--max-length <n>]
+dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
 
 dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -90,6 +90,10 @@ There are two distinct search paths:
 
 **1. DEVONthink native search** (`dtx search documents`)
 Passes the query directly to DEVONthink's search engine and returns document-level results. Supports all DEVONthink search operators: `NEAR`, `AND`, `OR`, `NOT`, wildcards, field qualifiers (`name:`, `tag:`, etc.), and parentheses. Use this for coarse filtering or when you need operator-based queries.
+
+- Results now include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, `year`, and `abstract`
+- `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
+- Bibliographic enrichment is sourced from `bibliography.json`
 
 **2. Local index search** (`dtx search passages`)
 Queries the local vector index built by `dtx index build` and returns passage-level results. Requires a local index. Two modes:
