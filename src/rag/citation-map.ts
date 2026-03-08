@@ -13,6 +13,8 @@ import { resolve } from "node:path";
 interface BibliographyItem {
   id?: string;
   file?: string;
+  type?: string;
+  title?: string;
   author?: Array<{
     family?: string;
     given?: string;
@@ -28,6 +30,8 @@ export interface BibliographyMetadata {
   citationKey: string;
   author?: string;
   year?: string;
+  title?: string;
+  publicationType?: string;
   abstract?: string;
 }
 
@@ -95,6 +99,9 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
         citationKey,
         author: formatAuthors(item.author),
         year: extractYear(item.issued),
+        title: typeof item.title === "string" ? item.title.trim() || undefined : undefined,
+        publicationType:
+          typeof item.type === "string" ? item.type.trim() || undefined : undefined,
         abstract: typeof item.abstract === "string" ? item.abstract.trim() || undefined : undefined,
       };
       map.set(normalized, citationKey);

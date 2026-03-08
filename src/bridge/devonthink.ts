@@ -26,20 +26,28 @@ import {
   type CitationMapLoadResult,
 } from "../rag/citation-map.js";
 
-interface DocumentSearchResult {
+interface RawDocumentSearchResult {
   uuid: string;
-  name: string;
   score: number;
   recordType: string;
-  tags: string[];
-  location: string;
-  database: string;
+  tags?: string[];
   modificationDate: string;
   path?: string;
+}
+
+interface DocumentSearchResult {
   citationKey?: string;
   author?: string;
   year?: string;
+  title?: string;
+  publicationType?: string;
   abstract?: string;
+  uuid: string;
+  score: number;
+  fileType: string;
+  modificationDate: string;
+  path?: string;
+  tags?: string[];
 }
 
 interface SearchDocumentOptions {
@@ -47,9 +55,8 @@ interface SearchDocumentOptions {
   includeAbstract?: boolean;
 }
 
-interface DocumentContentResult {
+interface RawDocumentContentResult {
   uuid: string;
-  name: string;
   recordType: string;
   contentFormat: string;
   content: string;
@@ -57,10 +64,23 @@ interface DocumentContentResult {
   totalLength: number;
   wordCount: number;
   path?: string;
+}
+
+interface DocumentContentResult {
   citationKey?: string;
   author?: string;
   year?: string;
+  title?: string;
+  publicationType?: string;
   abstract?: string;
+  uuid: string;
+  fileType: string;
+  contentFormat: string;
+  content: string;
+  truncated: boolean;
+  totalLength: number;
+  wordCount: number;
+  path?: string;
 }
 
 function enrichWithBibliography<T extends { path?: string; citationKey?: string }>(
@@ -71,6 +91,8 @@ function enrichWithBibliography<T extends { path?: string; citationKey?: string 
   citationKey?: string;
   author?: string;
   year?: string;
+  title?: string;
+  publicationType?: string;
   abstract?: string;
 } {
   const citationMap = bibliography?.map ?? null;
@@ -85,7 +107,68 @@ function enrichWithBibliography<T extends { path?: string; citationKey?: string 
     citationKey: citationKey || metadata?.citationKey,
     author: metadata?.author,
     year: metadata?.year,
+    title: metadata?.title,
+    publicationType: metadata?.publicationType,
     ...(options.includeAbstract ? { abstract: metadata?.abstract } : {}),
+  };
+}
+
+function roundScore(score: number): number {
+  return Math.round(score * 10000) / 10000;
+}
+
+function formatDocumentSearchResult(
+  result: RawDocumentSearchResult & {
+    citationKey?: string;
+    author?: string;
+    year?: string;
+    title?: string;
+    publicationType?: string;
+    abstract?: string;
+  },
+  options: { includeAbstract?: boolean } = {},
+): DocumentSearchResult {
+  return {
+    ...(result.citationKey ? { citationKey: result.citationKey } : {}),
+    ...(result.author ? { author: result.author } : {}),
+    ...(result.year ? { year: result.year } : {}),
+    ...(result.title ? { title: result.title } : {}),
+    ...(result.publicationType ? { publicationType: result.publicationType } : {}),
+    ...(options.includeAbstract && result.abstract ? { abstract: result.abstract } : {}),
+    uuid: result.uuid,
+    score: roundScore(result.score),
+    fileType: result.recordType,
+    modificationDate: result.modificationDate,
+    ...(result.path ? { path: result.path } : {}),
+    ...(result.tags && result.tags.length > 0 ? { tags: result.tags } : {}),
+  };
+}
+
+function formatDocumentContentResult(
+  result: RawDocumentContentResult & {
+    citationKey?: string;
+    author?: string;
+    year?: string;
+    title?: string;
+    publicationType?: string;
+    abstract?: string;
+  },
+): DocumentContentResult {
+  return {
+    ...(result.citationKey ? { citationKey: result.citationKey } : {}),
+    ...(result.author ? { author: result.author } : {}),
+    ...(result.year ? { year: result.year } : {}),
+    ...(result.title ? { title: result.title } : {}),
+    ...(result.publicationType ? { publicationType: result.publicationType } : {}),
+    ...(result.abstract ? { abstract: result.abstract } : {}),
+    uuid: result.uuid,
+    fileType: result.recordType,
+    contentFormat: result.contentFormat,
+    content: result.content,
+    truncated: result.truncated,
+    totalLength: result.totalLength,
+    wordCount: result.wordCount,
+    ...(result.path ? { path: result.path } : {}),
   };
 }
 
@@ -97,23 +180,27 @@ export async function searchDocuments(
   limit?: number,
   options: SearchDocumentOptions = {},
 ) {
-  const results = await runJXAJSON<DocumentSearchResult[]>(searchScript(query, database, limit));
+  const results = await runJXAJSON<RawDocumentSearchResult[]>(searchScript(query, database, limit));
   const bibliography = loadCitationMap(options.bibliographyPath);
 
-  return results.map((result) =>
-    enrichWithBibliography(result, bibliography, {
+  return results.map((result) => {
+    const enriched = enrichWithBibliography(result, bibliography, {
       includeAbstract: options.includeAbstract,
-    }),
-  );
+    });
+    return formatDocumentSearchResult(enriched, {
+      includeAbstract: options.includeAbstract,
+    });
+  });
 }
 
 export async function getDocumentContent(uuid: string, maxLength?: number, bibliographyPath?: string) {
   // Support CONTENT_MAX_LENGTH env var for custom default truncation length
   const effectiveMax = maxLength ?? (Number(process.env.CONTENT_MAX_LENGTH) || undefined);
-  const data = await runJXAJSON<DocumentContentResult>(getRecordContentScript(uuid, effectiveMax));
-  return enrichWithBibliography(data, loadCitationMap(bibliographyPath), {
+  const data = await runJXAJSON<RawDocumentContentResult>(getRecordContentScript(uuid, effectiveMax));
+  const enriched = enrichWithBibliography(data, loadCitationMap(bibliographyPath), {
     includeAbstract: true,
   });
+  return formatDocumentContentResult(enriched);
 }
 
 export async function getDocumentContentByCitationKey(
@@ -135,8 +222,20 @@ export async function getDocumentContentByCitationKey(
     if (match?.uuid) {
       const content = await getDocumentContent(match.uuid, maxLength, bibliographyPath);
       return {
-        ...content,
         citationKey,
+        ...(content.author ? { author: content.author } : {}),
+        ...(content.year ? { year: content.year } : {}),
+        ...(content.title ? { title: content.title } : {}),
+        ...(content.publicationType ? { publicationType: content.publicationType } : {}),
+        ...(content.abstract ? { abstract: content.abstract } : {}),
+        uuid: content.uuid,
+        fileType: content.fileType,
+        contentFormat: content.contentFormat,
+        content: content.content,
+        truncated: content.truncated,
+        totalLength: content.totalLength,
+        wordCount: content.wordCount,
+        ...(content.path ? { path: content.path } : {}),
       };
     }
   }
@@ -156,7 +255,21 @@ export async function listGroupContents(uuid?: string, limit?: number) {
 }
 
 export async function getRelatedDocuments(uuid: string, limit?: number) {
-  return runJXAJSON(getRelatedScript(uuid, limit));
+  const results = await runJXAJSON<
+    Array<{
+      uuid: string;
+      score: number;
+      recordType: string;
+      tags?: string[];
+    }>
+  >(getRelatedScript(uuid, limit));
+
+  return results.map((result) => ({
+    uuid: result.uuid,
+    score: roundScore(result.score),
+    fileType: result.recordType,
+    ...(result.tags && result.tags.length > 0 ? { tags: result.tags } : {}),
+  }));
 }
 
 /**

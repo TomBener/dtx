@@ -7,7 +7,7 @@ import { escapeForJXA } from "../executor.js";
 /**
  * Generate a JXA script to search DEVONthink databases.
  * Returns JSON array
- * [{uuid, name, score, recordType, tags, location, database, modificationDate, path}]
+ * [{uuid, score, recordType, tags?, modificationDate, path}]
  */
 export function searchScript(
   query: string,
@@ -37,17 +37,16 @@ export function searchScript(
   const out = [];
   for (let i = 0; i < limit; i++) {
     const r = results[i];
-    out.push({
+    const tags = r.tags();
+    const row = {
       uuid: r.uuid(),
-      name: r.name(),
       score: r.score(),
       recordType: r.recordType(),
-      tags: r.tags(),
-      location: r.location(),
-      database: r.database().name(),
       modificationDate: r.modificationDate().toISOString(),
       path: r.path(),
-    });
+    };
+    if (tags && tags.length > 0) row.tags = tags;
+    out.push(row);
   }
   return JSON.stringify(out);
 })()`;
@@ -71,14 +70,14 @@ export function getRelatedScript(uuid: string, limit: number = 10): string {
   for (let i = 0; i < related.length && out.length < max; i++) {
     const r = related[i];
     if (r.uuid() === ${u}) continue;
-    out.push({
+    const tags = r.tags();
+    const row = {
       uuid: r.uuid(),
-      name: r.name(),
       score: r.score(),
       recordType: r.recordType(),
-      tags: r.tags(),
-      database: r.database().name(),
-    });
+    };
+    if (tags && tags.length > 0) row.tags = tags;
+    out.push(row);
   }
   return JSON.stringify(out);
 })()`;

@@ -65,7 +65,6 @@ export function getRecordContentScript(uuid: string, maxLength?: number): string
     try { filePath = r.path() || ""; } catch(e) {}
     return JSON.stringify({
       uuid: r.uuid(),
-      name: r.name(),
       recordType: rType,
       contentFormat: "image",
       content: "[This record is an image file; text content cannot be extracted]",
@@ -94,7 +93,6 @@ export function getRecordContentScript(uuid: string, maxLength?: number): string
 
   return JSON.stringify({
     uuid: r.uuid(),
-    name: r.name(),
     recordType: rType,
     contentFormat: contentFormat,
     content: output,
