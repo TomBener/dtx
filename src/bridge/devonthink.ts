@@ -18,11 +18,11 @@ import {
 
 // ─── Read-Only Operations ────────────────────────────────
 
-export async function searchRecords(query: string, database?: string, limit?: number) {
+export async function searchDocuments(query: string, database?: string, limit?: number) {
   return runJXAJSON(searchScript(query, database, limit));
 }
 
-export async function getRecordContent(uuid: string, maxLength?: number) {
+export async function getDocumentContent(uuid: string, maxLength?: number) {
   // Support CONTENT_MAX_LENGTH env var for custom default truncation length
   const effectiveMax = maxLength ?? (Number(process.env.CONTENT_MAX_LENGTH) || undefined);
   return runJXAJSON(getRecordContentScript(uuid, effectiveMax));
@@ -36,7 +36,7 @@ export async function listGroupContents(uuid?: string, limit?: number) {
   return runJXAJSON(listGroupContentsScript(uuid, limit));
 }
 
-export async function getRelatedRecords(uuid: string, limit?: number) {
+export async function getRelatedDocuments(uuid: string, limit?: number) {
   return runJXAJSON(getRelatedScript(uuid, limit));
 }
 

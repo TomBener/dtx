@@ -7,11 +7,7 @@
 
 import * as dt from "./bridge/devonthink.js";
 import { buildIndex, getIndexStatus } from "./rag/index-manager.js";
-import {
-  hybridSearch,
-  resetStoreCache,
-  semanticSearchOnly,
-} from "./rag/hybrid-search.js";
+import { resetStoreCache, searchPassages } from "./rag/passage-search.js";
 import { getIndexDir } from "./rag/store.js";
 
 const DEFAULT_GROUP_UUID = "33203673-B7E2-4F3F-9D87-6E83EB4781EA";
@@ -135,20 +131,20 @@ function printHelp(): void {
   console.log(`Usage:
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
-  dtx records search --query "<q>" [--database <name>] [--limit <n>]
-  dtx records get --uuid <recordUuid> [--max-length <n>]
+  dtx search documents --query "<q>" [--database <name>] [--limit <n>]
+  dtx search passages --query "<q>" [--limit <n>] [--index-dir <path>]
+  dtx documents get --uuid <recordUuid> [--max-length <n>]
+  dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
   dtx index status [--index-dir <path>]
-  dtx search semantic --query "<q>" [--top-k <n>] [--index-dir <path>]
-  dtx search hybrid --query "<q>" [--database <name>] [--top-k <n>] [--index-dir <path>]
 
 Notes:
   - Default output is JSON (stdout)
   - Progress logs are emitted on stderr
   - Default group for "dtx index build": ${DEFAULT_GROUP_UUID}
   - Markdown files are excluded by default; use --include-md to include them
-  - content-max-length default: 32000 chars (set 0 to disable truncation)
-  - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography
+  - content-max-length default: no truncation (set a positive number to cap content)
+  - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography/dtx-index
 `);
 }
 
@@ -181,25 +177,36 @@ async function run(): Promise<never> {
       emitOk(data, commonMeta());
     }
 
-    // ─── records search/get ───
-    if (namespace === "records" && action === "search") {
+    // ─── search documents ───
+    if (namespace === "search" && action === "documents") {
       const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
       if (!query) {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
       }
       const database = getStringFlag(parsed.flags, "database");
       const limit = getNumberFlag(parsed.flags, "limit");
-      const data = await dt.searchRecords(query, database, limit);
+      const data = await dt.searchDocuments(query, database, limit);
       emitOk(data, commonMeta());
     }
 
-    if (namespace === "records" && action === "get") {
+    // ─── documents get ───
+    if (namespace === "documents" && action === "get") {
       const uuid = getStringFlag(parsed.flags, "uuid") || rest[0];
       if (!uuid) {
         emitError("MISSING_ARGUMENT", "Missing required argument: --uuid <recordUuid>");
       }
       const maxLength = getNumberFlag(parsed.flags, "max-length");
-      const data = await dt.getRecordContent(uuid, maxLength);
+      const data = await dt.getDocumentContent(uuid, maxLength);
+      emitOk(data, commonMeta());
+    }
+
+    if (namespace === "documents" && action === "related") {
+      const uuid = getStringFlag(parsed.flags, "uuid") || rest[0];
+      if (!uuid) {
+        emitError("MISSING_ARGUMENT", "Missing required argument: --uuid <recordUuid>");
+      }
+      const limit = getNumberFlag(parsed.flags, "limit");
+      const data = await dt.getRelatedDocuments(uuid, limit);
       emitOk(data, commonMeta());
     }
 
@@ -235,30 +242,15 @@ async function run(): Promise<never> {
       emitOk(status, { ...commonMeta(), indexDir });
     }
 
-    // ─── search semantic/hybrid ───
-    if (namespace === "search" && action === "semantic") {
+    // ─── search passages ───
+    if (namespace === "search" && action === "passages") {
       const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
       if (!query) {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
       }
-      const topK = getNumberFlag(parsed.flags, "top-k", "topk");
+      const limit = getNumberFlag(parsed.flags, "limit");
       const indexDir = toIndexDir(parsed.flags);
-      const data = await semanticSearchOnly(query, topK, indexDir);
-      emitOk(data, { ...commonMeta(), indexDir });
-    }
-
-    if (namespace === "search" && action === "hybrid") {
-      const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
-      if (!query) {
-        emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
-      }
-      const topK = getNumberFlag(parsed.flags, "top-k", "topk");
-      const indexDir = toIndexDir(parsed.flags);
-      const data = await hybridSearch(query, {
-        database: getStringFlag(parsed.flags, "database"),
-        topK,
-        indexDir,
-      });
+      const data = await searchPassages(query, limit, indexDir);
       emitOk(data, { ...commonMeta(), indexDir });
     }
 
