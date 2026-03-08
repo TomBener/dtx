@@ -252,7 +252,7 @@ function printHelp(): void {
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
-  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
+  dtx search passages [--query "<q>"] [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -392,9 +392,19 @@ async function run(): Promise<never> {
     // ─── search passages ───
     if (namespace === "search" && action === "passages") {
       const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
+      const uuid = getStringFlag(parsed.flags, "uuid");
       const hasCitationKey = Boolean(getStringFlag(parsed.flags, "citation-key"));
-      if (!query && !hasCitationKey) {
-        emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
+      if (uuid && hasCitationKey) {
+        emitError(
+          "INVALID_ARGUMENT",
+          "Provide either --uuid <recordUuid> or --citation-key <key>, not both.",
+        );
+      }
+      if (!query && !hasCitationKey && !uuid) {
+        emitError(
+          "MISSING_ARGUMENT",
+          'Missing required argument: --query "<text>" or --citation-key <key> or --uuid <recordUuid>',
+        );
       }
       const limit = getNumberFlag(parsed.flags, "limit");
       const perDocLimit = getNumberFlag(parsed.flags, "per-doc", "perdoc");
@@ -413,6 +423,7 @@ async function run(): Promise<never> {
         includeContext: getBoolFlag(parsed.flags, "context"),
         perDocLimit,
         debug: getBoolFlag(parsed.flags, "debug"),
+        uuid,
         citationKey: getStringFlag(parsed.flags, "citation-key"),
       });
       emitOk(data, { ...commonMeta(), indexDir });

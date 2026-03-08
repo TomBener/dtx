@@ -51,7 +51,7 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
 
 # Local index search — passage-level
-dtx search passages --query "<q>" \
+dtx search passages [--query "<q>"] \
   [--database <name>] \
   [--limit <n>] \
   [--per-doc <n>]          # default: 2 passages per doc
@@ -60,6 +60,7 @@ dtx search passages --query "<q>" \
   [--debug]                # include internal scoring fields
   [--index-dir <path>]
   [--citation-key <key>]   # fetch all passages for a known paper; --query optional
+  [--uuid <recordUuid>]    # fetch/search passages for a known document; --query optional
 ```
 
 ### Documents
@@ -84,7 +85,9 @@ dtx index status [--index-dir <path>]
 
 ## Key Behaviors
 
-**`--citation-key <key>`** — Bypasses query scoring. Retrieves all indexed chunks for a document identified by its citation key (e.g. `shucksmith2018rrr`), merges adjacent chunks into consecutive passages, and returns them in chunk order. No `--query` needed. Useful for reading through a specific paper.
+**`--citation-key <key>`** — With no query, retrieves all indexed chunks for a document identified by its citation key (e.g. `shucksmith2018rrr`), merges adjacent chunks into consecutive passages, and returns them in chunk order. With `--query`, restricts keyword or semantic passage search to that document.
+
+**`--uuid <recordUuid>`** — Equivalent document-scoped passage access using a DEVONthink UUID instead of a citation key. When combined with `--query`, both keyword and semantic passage search are restricted to that document.
 
 **`--per-doc 2`** (default) — Limits results to 2 passages per document, ensuring diversity across sources. Use `--per-doc 0` to remove the cap.
 

@@ -77,7 +77,7 @@ dtx doctor [--index-dir <path>]
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
-dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
+dtx search passages [--query "<q>"] [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
 
 dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -97,6 +97,7 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 - Pass `--with-abstract` when you want abstracts included in document search results
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
 - Bibliographic enrichment is sourced from `bibliography.json`
+- `dtx search passages` can be constrained to a document via `--uuid` or `--citation-key`; if a query is also supplied, passage ranking happens within that scope
 
 **2. Local index search** (`dtx search passages`)
 Queries the local vector index built by `dtx index build` and returns passage-level results. Requires a local index. Two modes:
@@ -173,6 +174,8 @@ Defaults for `dtx index build`:
 - By default, at most 2 passages per document are returned; use `--per-doc <n>` to change (0 for no cap)
 - Pass `--debug` to include internal ranking and passage-location fields
 - Results are post-processed into short excerpts, with adjacent hits merged
+- Pass `--uuid <recordUuid>` or `--citation-key <key>` without a query to read that document as consecutive passages
+- Pass `--uuid <recordUuid>` or `--citation-key <key>` with a query to search only within that document, including in `--mode semantic`
 - Use `--mode semantic` to query the local vector index instead
 
 ## Configuration (Environment Variables)

@@ -30,6 +30,8 @@ export interface PassageSearchOptions {
   includeContext?: boolean;
   perDocLimit?: number;
   debug?: boolean;
+  /** Filter results to a known DEVONthink document UUID */
+  uuid?: string;
   /** Filter results to chunks belonging to documents with this citation key */
   citationKey?: string;
 }
@@ -111,69 +113,17 @@ export async function searchPassages(
   const includeContext = options.includeContext === true;
   const perDocLimit = normalizePerDocLimit(options.perDocLimit);
   const debug = options.debug === true;
+  const uuid = options.uuid;
   const citationKey = options.citationKey;
 
-  // Citation key filter: return merged consecutive passages for a known document
-  if (citationKey) {
+  const allowedUuids = resolveAllowedUuids(store, uuid, citationKey);
+
+  // UUID / citation-key filter without query: return merged consecutive passages for known document(s)
+  if (!query.trim() && (uuid || citationKey)) {
     if (!store) {
       return { results: [], indexAvailable: false };
     }
-    const chunks = store
-      .getAllChunks()
-      .filter((c) => c.citationKey === citationKey)
-      .sort((a, b) => a.chunkIndex - b.chunkIndex);
-
-    // Group chunks by uuid (a citation key may map to multiple documents if replicated)
-    const byUuid = new Map<string, typeof chunks>();
-    for (const c of chunks) {
-      const arr = byUuid.get(c.uuid) ?? [];
-      arr.push(c);
-      byUuid.set(c.uuid, arr);
-    }
-
-    const results: InternalPassageResult[] = [];
-    for (const docChunks of byUuid.values()) {
-      // Merge runs of consecutive chunks into single passages
-      const runs: (typeof docChunks)[] = [];
-      let current: typeof docChunks = [];
-      for (const c of docChunks) {
-        if (current.length === 0 || c.chunkIndex === current[current.length - 1].chunkIndex + 1) {
-          current.push(c);
-        } else {
-          runs.push(current);
-          current = [c];
-        }
-      }
-      if (current.length > 0) runs.push(current);
-
-      for (const run of runs) {
-        const mergedText = mergePassageTexts(
-          run.map((c) => c.text),
-          DEFAULT_CHUNK_OVERLAP_CHARS,
-        );
-        const first = run[0];
-        const last = run[run.length - 1];
-        results.push({
-          uuid: first.uuid,
-          docName: first.docName,
-          database: first.database,
-          text: mergedText,
-          excerpt: mergedText,
-          contextText: mergedText,
-          passageIndex: first.chunkIndex,
-          passageIndexStart: first.chunkIndex,
-          passageIndexEnd: last.chunkIndex,
-          mergedPassageCount: run.length,
-          score: 1,
-          documentScore: 1,
-          passageScore: 1,
-          citationKey: first.citationKey,
-          mode: "keyword",
-        });
-      }
-    }
-
-    results.sort((a, b) => a.passageIndex - b.passageIndex);
+    const results = getAllScopedPassages(store, allowedUuids, options.database);
     return {
       results: toPublicPassageResults(results.slice(0, limit), includeContext, debug),
       indexAvailable: true,
@@ -184,7 +134,14 @@ export async function searchPassages(
     if (!store) {
       return { results: [], indexAvailable: false };
     }
-    const results = await searchSemanticPassages(query, limit, store, perDocLimit);
+    const results = await searchSemanticPassages(
+      query,
+      limit,
+      store,
+      perDocLimit,
+      options.database,
+      allowedUuids,
+    );
     return {
       results: toPublicPassageResults(results, includeContext, debug),
       indexAvailable: true,
@@ -194,7 +151,14 @@ export async function searchPassages(
   if (!store) {
     return { results: [], indexAvailable: false };
   }
-  const results = searchIndexedKeywordPassages(query, limit, options.database, store, perDocLimit);
+  const results = searchIndexedKeywordPassages(
+    query,
+    limit,
+    options.database,
+    store,
+    perDocLimit,
+    allowedUuids,
+  );
   return {
     results: toPublicPassageResults(results, includeContext, debug),
     indexAvailable: true,
@@ -207,6 +171,7 @@ function searchIndexedKeywordPassages(
   database: string | undefined,
   store: VectorStore,
   perDocLimit?: number,
+  allowedUuids?: Set<string>,
 ): InternalPassageResult[] {
   const candidatePassages: CandidatePassage[] = [];
   const documentBestScores = new Map<string, number>();
@@ -214,6 +179,7 @@ function searchIndexedKeywordPassages(
 
   for (const chunk of store.getAllChunks()) {
     if (database && chunk.database !== database) continue;
+    if (allowedUuids && !allowedUuids.has(chunk.uuid)) continue;
 
     const titleScore =
       titleScores.get(chunk.uuid) ?? computeKeywordSignals(query, chunk.docName).score;
@@ -264,6 +230,8 @@ async function searchSemanticPassages(
   limit: number,
   store: VectorStore,
   perDocLimit?: number,
+  database?: string,
+  allowedUuids?: Set<string>,
 ): Promise<InternalPassageResult[]> {
   const embedder = getEmbedder();
   const queryVector = await embedder.embedQuery(query);
@@ -273,7 +241,8 @@ async function searchSemanticPassages(
   );
 
   const candidates = store
-    .search(queryVector, candidatePoolSize)
+    .search(queryVector, candidatePoolSize, allowedUuids)
+    .filter((r) => !database || r.database === database)
     .map((r) => {
       const lexical = computeKeywordSignals(query, r.text);
       const semanticScore = normalizeSemanticScore(r.score);
@@ -299,6 +268,89 @@ async function searchSemanticPassages(
     .sort((a, b) => b.score - a.score);
 
   return postProcessPassages(query, candidates, limit, "semantic", perDocLimit);
+}
+
+function resolveAllowedUuids(
+  store: VectorStore | null,
+  uuid?: string,
+  citationKey?: string,
+): Set<string> | undefined {
+  if (!store) return undefined;
+  if (uuid) return new Set([uuid]);
+  if (!citationKey) return undefined;
+
+  const out = new Set<string>();
+  for (const chunk of store.getAllChunks()) {
+    if (chunk.citationKey === citationKey) out.add(chunk.uuid);
+  }
+  return out.size > 0 ? out : new Set<string>();
+}
+
+function getAllScopedPassages(
+  store: VectorStore,
+  allowedUuids?: Set<string>,
+  database?: string,
+): InternalPassageResult[] {
+  const chunks = store
+    .getAllChunks()
+    .filter((c) => (!database || c.database === database) && (!allowedUuids || allowedUuids.has(c.uuid)))
+    .sort((a, b) => {
+      if (a.uuid !== b.uuid) return a.uuid.localeCompare(b.uuid);
+      return a.chunkIndex - b.chunkIndex;
+    });
+
+  const byUuid = new Map<string, typeof chunks>();
+  for (const c of chunks) {
+    const arr = byUuid.get(c.uuid) ?? [];
+    arr.push(c);
+    byUuid.set(c.uuid, arr);
+  }
+
+  const results: InternalPassageResult[] = [];
+  for (const docChunks of byUuid.values()) {
+    const runs: (typeof docChunks)[] = [];
+    let current: typeof docChunks = [];
+    for (const c of docChunks) {
+      if (current.length === 0 || c.chunkIndex === current[current.length - 1].chunkIndex + 1) {
+        current.push(c);
+      } else {
+        runs.push(current);
+        current = [c];
+      }
+    }
+    if (current.length > 0) runs.push(current);
+
+    for (const run of runs) {
+      const mergedText = mergePassageTexts(
+        run.map((c) => c.text),
+        DEFAULT_CHUNK_OVERLAP_CHARS,
+      );
+      const first = run[0];
+      const last = run[run.length - 1];
+      results.push({
+        uuid: first.uuid,
+        docName: first.docName,
+        database: first.database,
+        text: mergedText,
+        excerpt: mergedText,
+        contextText: mergedText,
+        passageIndex: first.chunkIndex,
+        passageIndexStart: first.chunkIndex,
+        passageIndexEnd: last.chunkIndex,
+        mergedPassageCount: run.length,
+        score: 1,
+        documentScore: 1,
+        passageScore: 1,
+        citationKey: first.citationKey,
+        mode: "keyword",
+      });
+    }
+  }
+
+  return results.sort((a, b) => {
+    if (a.uuid !== b.uuid) return a.uuid.localeCompare(b.uuid);
+    return a.passageIndex - b.passageIndex;
+  });
 }
 
 function computeKeywordSignals(
