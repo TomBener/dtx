@@ -75,7 +75,7 @@ Error shape:
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>]
+dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
 
 dtx documents get --uuid <recordUuid> [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -86,16 +86,20 @@ dtx index status [--index-dir <path>]
 
 ## Search Modes
 
-- `dtx search documents`
-  Uses DEVONthink native keyword search and returns document-level results. Supports advanced operators such as `NEAR`, `AND`, `OR`, `NOT`, wildcards, and field qualifiers (e.g. `name:`, `tag:`), since the query is passed directly to DEVONthink's search engine.
-- `dtx search passages --mode keyword` (default)
-  Returns passage-level results using lexical matching. If a local index is available, it scans indexed chunks directly; otherwise it falls back to DEVONthink document search followed by local passage extraction and scoring.
-- `dtx search passages --mode semantic`
-  Embeds the query and performs cosine similarity search over the local vector index, then re-ranks results with lexical signals.
+There are two distinct search paths:
+
+**1. DEVONthink native search** (`dtx search documents`)
+Passes the query directly to DEVONthink's search engine and returns document-level results. Supports all DEVONthink search operators: `NEAR`, `AND`, `OR`, `NOT`, wildcards, field qualifiers (`name:`, `tag:`, etc.), and parentheses. Use this for coarse filtering or when you need operator-based queries.
+
+**2. Local index search** (`dtx search passages`)
+Queries the local vector index built by `dtx index build` and returns passage-level results. Requires a local index. Two modes:
+- `--mode keyword` (default): lexical matching over indexed chunks
+- `--mode semantic`: embeds the query and performs cosine similarity search, then re-ranks with lexical signals
+
+Only `--mode semantic` requires an embedding API key at query time.
+
 - `dtx documents related`
   Uses DEVONthink `See Also` / `compare()` and returns related documents for one known UUID.
-
-Only `search passages --mode semantic` requires an embedding API key at query time.
 
 ```mermaid
 flowchart TD
@@ -104,12 +108,8 @@ flowchart TD
     D1 --> D2["Document results"]
 
     Q --> PK["search passages (keyword)"]
-    PK --> PK1{"Local index available?"}
-    PK1 -->|Yes| PK2["Scan indexed chunks\nwith lexical matching"]
-    PK1 -->|No| PK3["DEVONthink document search"]
-    PK3 --> PK4["Read & split candidate documents\ninto passage units"]
+    PK --> PK2["Scan indexed chunks\nwith lexical matching"]
     PK2 --> PK5["Score & rank passages"]
-    PK4 --> PK5
     PK5 --> PP
 
     Q --> PS["search passages (semantic)"]
@@ -159,12 +159,11 @@ Defaults for `dtx index build`:
 - Semantic chunking defaults to `800` chars with `120` chars of overlap
 - Chunk metadata shard size defaults to `10000`
 
-`dtx search passages` defaults to `--mode keyword`:
+`dtx search passages` requires a local index (`dtx index build`) and defaults to `--mode keyword`:
 
-- If an index is available, it scans indexed chunks directly with lexical matching
-- If no index is available, it falls back to DEVONthink document search and then extracts passages locally
+- Scans indexed chunks with lexical matching
 - By default, results return only `excerpt`; pass `--context` to also include `contextText`
-- By default, there is no per-document cap; use `--per-doc <n>` to limit how many passages one document can contribute
+- By default, at most 2 passages per document are returned; use `--per-doc <n>` to change (0 for no cap)
 - Pass `--debug` to include internal ranking and passage-location fields
 - Results are post-processed into short excerpts, with adjacent hits merged
 - Use `--mode semantic` to query the local vector index instead
