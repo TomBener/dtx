@@ -132,7 +132,7 @@ function printHelp(): void {
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>]
+  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>]
   dtx documents get --uuid <recordUuid> [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -245,7 +245,8 @@ async function run(): Promise<never> {
     // ─── search passages ───
     if (namespace === "search" && action === "passages") {
       const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
-      if (!query) {
+      const hasCitationKey = Boolean(getStringFlag(parsed.flags, "citation-key"));
+      if (!query && !hasCitationKey) {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
       }
       const limit = getNumberFlag(parsed.flags, "limit");
@@ -265,6 +266,7 @@ async function run(): Promise<never> {
         includeContext: getBoolFlag(parsed.flags, "context"),
         perDocLimit,
         debug: getBoolFlag(parsed.flags, "debug"),
+        citationKey: getStringFlag(parsed.flags, "citation-key"),
       });
       emitOk(data, { ...commonMeta(), indexDir });
     }
