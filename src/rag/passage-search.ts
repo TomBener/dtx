@@ -1,24 +1,19 @@
 /**
- * passage-search.ts — Passage-level search
+ * passage-search.ts — Passage-level search over the local vector index
  *
- * Default mode is keyword-first:
- *   1. Use DEVONthink keyword search to find candidate documents
- *   2. Extract and rank passages from those documents locally
- *
- * Semantic mode remains available as an option and queries the local vector index.
+ * Requires a local index built via `dtx index build`.
+ * Two modes:
+ *   - keyword: lexical matching over indexed chunks
+ *   - semantic: cosine similarity search, re-ranked with lexical signals
  */
 
-import * as dt from "../bridge/devonthink.js";
 import { getEmbedder } from "./embedder.js";
 import { VectorStore, getIndexDir, indexExists } from "./store.js";
 
 const storeCache = new Map<string, VectorStore>();
 
 const DEFAULT_PASSAGE_MODE: PassageSearchMode = "keyword";
-const DEFAULT_DOCUMENT_CANDIDATES = 20;
 const DEFAULT_MAX_MERGED_PASSAGES = 2;
-const DEFAULT_PASSAGE_MAX_CHARS = 700;
-const DEFAULT_PASSAGE_MIN_CHARS = 80;
 const DEFAULT_EXCERPT_TARGET_CHARS = 280;
 const DEFAULT_EXCERPT_BOUNDARY_SCAN_CHARS = 80;
 const DEFAULT_CHUNK_OVERLAP_CHARS = Number(process.env.CHUNK_OVERLAP_CHARS) || 120;
@@ -35,6 +30,8 @@ export interface PassageSearchOptions {
   includeContext?: boolean;
   perDocLimit?: number;
   debug?: boolean;
+  /** Filter results to chunks belonging to documents with this citation key */
+  citationKey?: string;
 }
 
 export interface PassageSearchResult {
@@ -52,19 +49,6 @@ export interface PassageSearchResult {
   documentScore?: number;
   passageScore?: number;
   mode?: PassageSearchMode;
-}
-
-interface DocumentCandidate {
-  uuid: string;
-  docName: string;
-  database: string;
-  documentScore: number;
-  citationKey?: string;
-}
-
-interface PassageUnit {
-  passageIndex: number;
-  text: string;
 }
 
 interface InternalPassageResult {
@@ -127,6 +111,74 @@ export async function searchPassages(
   const includeContext = options.includeContext === true;
   const perDocLimit = normalizePerDocLimit(options.perDocLimit);
   const debug = options.debug === true;
+  const citationKey = options.citationKey;
+
+  // Citation key filter: return merged consecutive passages for a known document
+  if (citationKey) {
+    if (!store) {
+      return { results: [], indexAvailable: false };
+    }
+    const chunks = store
+      .getAllChunks()
+      .filter((c) => c.citationKey === citationKey)
+      .sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+    // Group chunks by uuid (a citation key may map to multiple documents if replicated)
+    const byUuid = new Map<string, typeof chunks>();
+    for (const c of chunks) {
+      const arr = byUuid.get(c.uuid) ?? [];
+      arr.push(c);
+      byUuid.set(c.uuid, arr);
+    }
+
+    const results: InternalPassageResult[] = [];
+    for (const docChunks of byUuid.values()) {
+      // Merge runs of consecutive chunks into single passages
+      const runs: (typeof docChunks)[] = [];
+      let current: typeof docChunks = [];
+      for (const c of docChunks) {
+        if (current.length === 0 || c.chunkIndex === current[current.length - 1].chunkIndex + 1) {
+          current.push(c);
+        } else {
+          runs.push(current);
+          current = [c];
+        }
+      }
+      if (current.length > 0) runs.push(current);
+
+      for (const run of runs) {
+        const mergedText = mergePassageTexts(
+          run.map((c) => c.text),
+          DEFAULT_CHUNK_OVERLAP_CHARS,
+        );
+        const first = run[0];
+        const last = run[run.length - 1];
+        results.push({
+          uuid: first.uuid,
+          docName: first.docName,
+          database: first.database,
+          text: mergedText,
+          excerpt: mergedText,
+          contextText: mergedText,
+          passageIndex: first.chunkIndex,
+          passageIndexStart: first.chunkIndex,
+          passageIndexEnd: last.chunkIndex,
+          mergedPassageCount: run.length,
+          score: 1,
+          documentScore: 1,
+          passageScore: 1,
+          citationKey: first.citationKey,
+          mode: "keyword",
+        });
+      }
+    }
+
+    results.sort((a, b) => a.passageIndex - b.passageIndex);
+    return {
+      results: toPublicPassageResults(results.slice(0, limit), includeContext, debug),
+      indexAvailable: true,
+    };
+  }
 
   if (mode === "semantic") {
     if (!store) {
@@ -139,68 +191,14 @@ export async function searchPassages(
     };
   }
 
-  const results = await searchKeywordPassages(
-    query,
-    limit,
-    options.database,
-    store,
-    perDocLimit,
-  );
+  if (!store) {
+    return { results: [], indexAvailable: false };
+  }
+  const results = searchIndexedKeywordPassages(query, limit, options.database, store, perDocLimit);
   return {
     results: toPublicPassageResults(results, includeContext, debug),
-    indexAvailable,
+    indexAvailable: true,
   };
-}
-
-async function searchKeywordPassages(
-  query: string,
-  limit: number,
-  database: string | undefined,
-  store: VectorStore | null,
-  perDocLimit?: number,
-): Promise<InternalPassageResult[]> {
-  if (store) {
-    return searchIndexedKeywordPassages(query, limit, database, store, perDocLimit);
-  }
-
-  const documentCandidates = await collectKeywordDocuments(query, database, limit, null);
-  const candidatePassages: CandidatePassage[] = [];
-
-  for (const doc of documentCandidates) {
-    const units = await getPassageUnitsForDocument(doc.uuid, null);
-    if (units.length === 0) continue;
-
-    for (const unit of units) {
-      const { score, passageScore, hasDirectMatch } = scoreKeywordPassage(
-        query,
-        unit.text,
-        doc.documentScore,
-      );
-      if (score <= 0) continue;
-
-      candidatePassages.push({
-        uuid: doc.uuid,
-        docName: doc.docName,
-        database: doc.database,
-        text: unit.text,
-        excerpt: unit.text,
-        contextText: unit.text,
-        passageIndex: unit.passageIndex,
-        passageIndexStart: unit.passageIndex,
-        passageIndexEnd: unit.passageIndex,
-        mergedPassageCount: 1,
-        score,
-        documentScore: doc.documentScore,
-        passageScore,
-        citationKey: doc.citationKey,
-        mode: "keyword",
-        hasDirectMatch,
-      });
-    }
-  }
-
-  candidatePassages.sort((a, b) => b.score - a.score);
-  return postProcessPassages(query, candidatePassages, limit, "keyword", perDocLimit);
 }
 
 function searchIndexedKeywordPassages(
@@ -261,25 +259,6 @@ function searchIndexedKeywordPassages(
   return postProcessPassages(query, candidatePassages, limit, "keyword", perDocLimit);
 }
 
-async function getPassageUnitsForDocument(
-  uuid: string,
-  store: VectorStore | null,
-): Promise<PassageUnit[]> {
-  if (store) {
-    const chunks = store.getChunksByUuid(uuid);
-    if (chunks.length > 0) {
-      return chunks.map((chunk) => ({
-        passageIndex: chunk.chunkIndex,
-        text: chunk.text,
-      }));
-    }
-  }
-
-  const raw = (await dt.getDocumentContent(uuid)) as { content?: string; error?: string };
-  if (!raw || raw.error || !raw.content) return [];
-  return splitIntoPassageUnits(raw.content);
-}
-
 async function searchSemanticPassages(
   query: string,
   limit: number,
@@ -320,174 +299,6 @@ async function searchSemanticPassages(
     .sort((a, b) => b.score - a.score);
 
   return postProcessPassages(query, candidates, limit, "semantic", perDocLimit);
-}
-
-async function collectKeywordDocuments(
-  query: string,
-  database: string | undefined,
-  limit: number,
-  scopeUuids: Set<string> | null,
-): Promise<DocumentCandidate[]> {
-  const target = scopeUuids
-    ? Math.max(limit * 20, 100)
-    : Math.max(limit * 4, DEFAULT_DOCUMENT_CANDIDATES);
-  const byUuid = new Map<string, DocumentCandidate>();
-  const queryVariants = buildDocumentQueryVariants(query);
-
-  for (const variant of queryVariants) {
-    let results: Array<{
-      uuid: string;
-      name: string;
-      score: number;
-      database: string;
-    }> = [];
-
-    try {
-      const raw = await dt.searchDocuments(variant, database, target);
-      if (Array.isArray(raw)) {
-        results = raw as Array<{
-          uuid: string;
-          name: string;
-          score: number;
-          database: string;
-        }>;
-      }
-    } catch {
-      continue;
-    }
-
-    for (const r of results) {
-      if (scopeUuids && !scopeUuids.has(r.uuid)) continue;
-      const documentScore = normalizeDocumentScore(r.score);
-      const existing = byUuid.get(r.uuid);
-      if (!existing || documentScore > existing.documentScore) {
-        byUuid.set(r.uuid, {
-          uuid: r.uuid,
-          docName: r.name,
-          database: r.database,
-          documentScore,
-        });
-      }
-    }
-
-    if (byUuid.size >= target) break;
-  }
-
-  return [...byUuid.values()]
-    .sort((a, b) => b.documentScore - a.documentScore)
-    .slice(0, target);
-}
-
-function buildDocumentQueryVariants(query: string): string[] {
-  const out = new Set<string>();
-  const normalized = query.trim().normalize("NFKC");
-  if (!normalized) return [];
-
-  out.add(normalized);
-  if (/\s/.test(normalized)) {
-    out.add(`"${normalized}"`);
-  }
-
-  const tokens = normalized
-    .split(/[^\p{L}\p{N}\p{Script=Han}]+/u)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-
-  for (const token of tokens) {
-    out.add(token);
-    if (/^\p{Script=Han}+$/u.test(token) && token.length >= 4) {
-      if (token.length >= 3) out.add(token.slice(0, 3));
-      if (token.length >= 4) out.add(token.slice(0, 4));
-
-      for (const len of [3, 4]) {
-        if (token.length < len) continue;
-        for (let i = 0; i <= token.length - len; i++) {
-          out.add(token.slice(i, i + len));
-        }
-      }
-    }
-  }
-
-  return [...out].slice(0, 12);
-}
-
-function splitIntoPassageUnits(content: string): PassageUnit[] {
-  const text = content.replace(/\r\n/g, "\n").trim();
-  if (!text) return [];
-
-  const paragraphs = text
-    .split(/\n\s*\n+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-
-  const units: PassageUnit[] = [];
-  let unitIndex = 0;
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.length < DEFAULT_PASSAGE_MIN_CHARS && units.length > 0) {
-      const prev = units[units.length - 1];
-      if (prev.text.length + paragraph.length + 2 <= DEFAULT_PASSAGE_MAX_CHARS) {
-        prev.text += `\n\n${paragraph}`;
-        continue;
-      }
-    }
-
-    if (paragraph.length <= DEFAULT_PASSAGE_MAX_CHARS) {
-      units.push({ passageIndex: unitIndex++, text: paragraph });
-      continue;
-    }
-
-    for (const segment of splitLongPassage(paragraph)) {
-      if (segment.length < DEFAULT_PASSAGE_MIN_CHARS) continue;
-      units.push({ passageIndex: unitIndex++, text: segment });
-    }
-  }
-
-  return units;
-}
-
-function splitLongPassage(text: string): string[] {
-  const sentences = text.split(/(?<=[.!?。！？；\n])\s+/);
-  const out: string[] = [];
-  let current = "";
-
-  for (const sentence of sentences) {
-    const trimmed = sentence.trim();
-    if (!trimmed) continue;
-
-    if (current.length + trimmed.length + 1 <= DEFAULT_PASSAGE_MAX_CHARS) {
-      current += (current ? " " : "") + trimmed;
-      continue;
-    }
-
-    if (current) out.push(current);
-    if (trimmed.length <= DEFAULT_PASSAGE_MAX_CHARS) {
-      current = trimmed;
-      continue;
-    }
-
-    for (let i = 0; i < trimmed.length; i += DEFAULT_PASSAGE_MAX_CHARS) {
-      out.push(trimmed.slice(i, i + DEFAULT_PASSAGE_MAX_CHARS));
-    }
-    current = "";
-  }
-
-  if (current) out.push(current);
-  return out;
-}
-
-function scoreKeywordPassage(
-  query: string,
-  text: string,
-  documentScore: number,
-): { score: number; passageScore: number; hasDirectMatch: boolean } {
-  const lexical = computeKeywordSignals(query, text);
-  if (lexical.score <= 0) {
-    return { score: 0, passageScore: 0, hasDirectMatch: false };
-  }
-
-  const score = Math.min(1, lexical.score + documentScore * 0.18);
-  return { score, passageScore: lexical.score, hasDirectMatch: lexical.hasDirectMatch };
 }
 
 function computeKeywordSignals(
@@ -815,11 +626,6 @@ function normalizeSemanticScore(score: number): number {
   return Math.max(0, Math.min(1, (score - 0.4) / 0.6));
 }
 
-function normalizeDocumentScore(score: number): number {
-  if (!Number.isFinite(score)) return 0;
-  if (score <= 1) return Math.max(0, Math.min(1, score));
-  return Math.max(0, Math.min(1, score / 100));
-}
 
 function extractMatchPhrases(normalizedQuery: string): string[] {
   const phrases = new Set<string>();
@@ -876,10 +682,14 @@ function getOrCreateSet(map: Map<string, Set<number>>, key: string): Set<number>
   return created;
 }
 
+const DEFAULT_PER_DOC_LIMIT = 2;
+
 function normalizePerDocLimit(input?: number): number | undefined {
-  if (typeof input !== "number" || !Number.isFinite(input) || input <= 0)
-    return undefined;
-  return Math.floor(input);
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || input <= 0) return undefined; // 0 or negative = no limit
+    return Math.floor(input);
+  }
+  return DEFAULT_PER_DOC_LIMIT;
 }
 
 function toPublicPassageResults(
