@@ -109,7 +109,6 @@ export async function searchPassages(
 }> {
   const mode = options.mode || DEFAULT_PASSAGE_MODE;
   const store = getStore(options.indexDir);
-  const indexAvailable = store !== null;
   const includeContext = options.includeContext === true;
   const perDocLimit = normalizePerDocLimit(options.perDocLimit);
   const debug = options.debug === true;
@@ -293,7 +292,11 @@ function getAllScopedPassages(
 ): InternalPassageResult[] {
   const chunks = store
     .getAllChunks()
-    .filter((c) => (!database || c.database === database) && (!allowedUuids || allowedUuids.has(c.uuid)))
+    .filter(
+      (c) =>
+        (!database || c.database === database) &&
+        (!allowedUuids || allowedUuids.has(c.uuid)),
+    )
     .sort((a, b) => {
       if (a.uuid !== b.uuid) return a.uuid.localeCompare(b.uuid);
       return a.chunkIndex - b.chunkIndex;
@@ -311,7 +314,10 @@ function getAllScopedPassages(
     const runs: (typeof docChunks)[] = [];
     let current: typeof docChunks = [];
     for (const c of docChunks) {
-      if (current.length === 0 || c.chunkIndex === current[current.length - 1].chunkIndex + 1) {
+      if (
+        current.length === 0 ||
+        c.chunkIndex === current[current.length - 1].chunkIndex + 1
+      ) {
         current.push(c);
       } else {
         runs.push(current);
@@ -677,7 +683,6 @@ function isBoundaryChar(char: string | undefined): boolean {
 function normalizeSemanticScore(score: number): number {
   return Math.max(0, Math.min(1, (score - 0.4) / 0.6));
 }
-
 
 function extractMatchPhrases(normalizedQuery: string): string[] {
   const phrases = new Set<string>();

@@ -179,17 +179,18 @@ function getDotEnvDiagnostics(): {
     found: existsSync(dotEnvPath),
     path: dotEnvPath,
     keys: Object.keys(parsed).sort(),
-    googleApiKey: typeof parsed.GOOGLE_API_KEY === "string" && parsed.GOOGLE_API_KEY.length > 0,
-    openaiApiKey: typeof parsed.OPENAI_API_KEY === "string" && parsed.OPENAI_API_KEY.length > 0,
+    googleApiKey:
+      typeof parsed.GOOGLE_API_KEY === "string" && parsed.GOOGLE_API_KEY.length > 0,
+    openaiApiKey:
+      typeof parsed.OPENAI_API_KEY === "string" && parsed.OPENAI_API_KEY.length > 0,
     embeddingProvider: parsed.EMBEDDING_PROVIDER || undefined,
   };
 }
 
-function getResolvedSemanticProvider(dotEnv: { embeddingProvider?: string }): "gemini" | "openai" {
-  const provider =
-    process.env.EMBEDDING_PROVIDER ||
-    dotEnv.embeddingProvider ||
-    "gemini";
+function getResolvedSemanticProvider(dotEnv: {
+  embeddingProvider?: string;
+}): "gemini" | "openai" {
+  const provider = process.env.EMBEDDING_PROVIDER || dotEnv.embeddingProvider || "gemini";
   return provider === "openai" ? "openai" : "gemini";
 }
 

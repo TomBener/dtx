@@ -230,7 +230,11 @@ export class VectorStore {
   }
 
   /** Semantic search: find top-K most similar chunks by cosine similarity */
-  search(queryVector: number[], topK: number = 10, allowedUuids?: Set<string>): SearchResult[] {
+  search(
+    queryVector: number[],
+    topK: number = 10,
+    allowedUuids?: Set<string>,
+  ): SearchResult[] {
     if (this.chunks.length === 0) return [];
 
     const scores: Array<{ index: number; score: number }> = [];

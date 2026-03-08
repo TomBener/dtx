@@ -22,7 +22,6 @@ import {
   getRecordStemFromPath,
   loadCitationMap,
   resolveCitationKey,
-  type BibliographyMetadata,
   type CitationMapLoadResult,
 } from "../rag/citation-map.js";
 
@@ -180,7 +179,9 @@ export async function searchDocuments(
   limit?: number,
   options: SearchDocumentOptions = {},
 ) {
-  const results = await runJXAJSON<RawDocumentSearchResult[]>(searchScript(query, database, limit));
+  const results = await runJXAJSON<RawDocumentSearchResult[]>(
+    searchScript(query, database, limit),
+  );
   const bibliography = loadCitationMap(options.bibliographyPath);
 
   return results.map((result) => {
@@ -193,10 +194,16 @@ export async function searchDocuments(
   });
 }
 
-export async function getDocumentContent(uuid: string, maxLength?: number, bibliographyPath?: string) {
+export async function getDocumentContent(
+  uuid: string,
+  maxLength?: number,
+  bibliographyPath?: string,
+) {
   // Support CONTENT_MAX_LENGTH env var for custom default truncation length
   const effectiveMax = maxLength ?? (Number(process.env.CONTENT_MAX_LENGTH) || undefined);
-  const data = await runJXAJSON<RawDocumentContentResult>(getRecordContentScript(uuid, effectiveMax));
+  const data = await runJXAJSON<RawDocumentContentResult>(
+    getRecordContentScript(uuid, effectiveMax),
+  );
   const enriched = enrichWithBibliography(data, loadCitationMap(bibliographyPath), {
     includeAbstract: true,
   });
@@ -209,7 +216,10 @@ export async function getDocumentContentByCitationKey(
   bibliographyPath?: string,
 ) {
   const bibliography = loadCitationMap(bibliographyPath);
-  const paths = getPathsForCitationKey(bibliography?.pathsByCitationKey ?? null, citationKey);
+  const paths = getPathsForCitationKey(
+    bibliography?.pathsByCitationKey ?? null,
+    citationKey,
+  );
   if (paths.length === 0) {
     throw new Error(`Citation key not found in bibliography: ${citationKey}`);
   }
@@ -240,7 +250,10 @@ export async function getDocumentContentByCitationKey(
     }
   }
 
-  const metadata = getMetadataForCitationKey(bibliography?.metadataByCitationKey ?? null, citationKey);
+  const metadata = getMetadataForCitationKey(
+    bibliography?.metadataByCitationKey ?? null,
+    citationKey,
+  );
   throw new Error(
     `Citation key resolved in bibliography but matching DEVONthink record was not found: ${citationKey}${metadata?.author ? ` (${metadata.author})` : ""}`,
   );

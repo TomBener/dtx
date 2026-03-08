@@ -1,6 +1,6 @@
 {
   "name": "dtx",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Non-interactive dtx CLI for DEVONthink indexing and semantic retrieval",
   "repository": {
     "type": "git",

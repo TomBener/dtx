@@ -99,10 +99,14 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
         citationKey,
         author: formatAuthors(item.author),
         year: extractYear(item.issued),
-        title: typeof item.title === "string" ? item.title.trim() || undefined : undefined,
+        title:
+          typeof item.title === "string" ? item.title.trim() || undefined : undefined,
         publicationType:
           typeof item.type === "string" ? item.type.trim() || undefined : undefined,
-        abstract: typeof item.abstract === "string" ? item.abstract.trim() || undefined : undefined,
+        abstract:
+          typeof item.abstract === "string"
+            ? item.abstract.trim() || undefined
+            : undefined,
       };
       map.set(normalized, citationKey);
       map.set(normalized.toLowerCase(), citationKey);
@@ -217,7 +221,9 @@ function formatAuthors(
   return names.length > 0 ? names.join("; ") : undefined;
 }
 
-function extractYear(issued: { "date-parts"?: unknown[] } | undefined): string | undefined {
+function extractYear(
+  issued: { "date-parts"?: unknown[] } | undefined,
+): string | undefined {
   const first = issued?.["date-parts"]?.[0];
   if (!Array.isArray(first) || first.length === 0) return undefined;
   const year = first[0];
