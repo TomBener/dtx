@@ -152,7 +152,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
       groupUuid,
     );
     progress(
-      `Found ${allRecords.length} documents in group "${groupUuid}"` +
+      `Found ${allRecords.length} records in group "${groupUuid}"` +
         (database ? ` (database: "${database}")` : ""),
     );
   } else if (database) {
@@ -162,7 +162,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
       `database "${database}"`,
       database,
     );
-    progress(`Found ${allRecords.length} documents in "${database}"`);
+    progress(`Found ${allRecords.length} records in "${database}"`);
   } else {
     // Enumerate each database separately to avoid timeout/buffer limits
     const databases = (await dt.listDatabases()) as Array<{
