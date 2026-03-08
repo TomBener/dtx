@@ -75,7 +75,7 @@ Error shape:
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--mode <keyword|semantic>] [--index-dir <path>]
+dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>]
 
 dtx documents get --uuid <recordUuid> [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -161,7 +161,10 @@ Defaults for `dtx index build`:
 
 - If an index is available, it scans indexed chunks directly with lexical matching
 - If no index is available, it falls back to DEVONthink document search and then extracts passages locally
-- Results are post-processed into short excerpts, with adjacent hits merged and per-document deduplication
+- By default, results return only `excerpt`; pass `--context` to also include `contextText`
+- By default, there is no per-document cap; use `--per-doc <n>` to limit how many passages one document can contribute
+- Pass `--debug` to include internal ranking and passage-location fields
+- Results are post-processed into short excerpts, with adjacent hits merged
 - Use `--mode semantic` to query the local vector index instead
 
 ## Configuration (Environment Variables)

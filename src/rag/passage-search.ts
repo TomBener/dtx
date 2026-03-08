@@ -16,7 +16,6 @@ const storeCache = new Map<string, VectorStore>();
 
 const DEFAULT_PASSAGE_MODE: PassageSearchMode = "keyword";
 const DEFAULT_DOCUMENT_CANDIDATES = 20;
-const DEFAULT_PASSAGES_PER_DOCUMENT = 1;
 const DEFAULT_MAX_MERGED_PASSAGES = 2;
 const DEFAULT_PASSAGE_MAX_CHARS = 700;
 const DEFAULT_PASSAGE_MIN_CHARS = 80;
@@ -33,22 +32,26 @@ export interface PassageSearchOptions {
   database?: string;
   indexDir?: string;
   mode?: PassageSearchMode;
+  includeContext?: boolean;
+  perDocLimit?: number;
+  debug?: boolean;
 }
 
 export interface PassageSearchResult {
   uuid: string;
   docName: string;
-  database: string;
-  text: string;
-  passageIndex: number;
-  passageIndexStart: number;
-  passageIndexEnd: number;
-  mergedPassageCount: number;
+  excerpt: string;
   score: number;
-  documentScore: number;
-  passageScore: number;
   citationKey?: string;
-  mode: PassageSearchMode;
+  contextText?: string;
+  database?: string;
+  passageIndex?: number;
+  passageIndexStart?: number;
+  passageIndexEnd?: number;
+  mergedPassageCount?: number;
+  documentScore?: number;
+  passageScore?: number;
+  mode?: PassageSearchMode;
 }
 
 interface DocumentCandidate {
@@ -64,7 +67,25 @@ interface PassageUnit {
   text: string;
 }
 
-interface CandidatePassage extends PassageSearchResult {
+interface InternalPassageResult {
+  uuid: string;
+  docName: string;
+  database: string;
+  text: string;
+  excerpt: string;
+  contextText: string;
+  passageIndex: number;
+  passageIndexStart: number;
+  passageIndexEnd: number;
+  mergedPassageCount: number;
+  score: number;
+  documentScore: number;
+  passageScore: number;
+  citationKey?: string;
+  mode: PassageSearchMode;
+}
+
+interface CandidatePassage extends InternalPassageResult {
   hasDirectMatch: boolean;
 }
 
@@ -99,22 +120,30 @@ export async function searchPassages(
 ): Promise<{
   results: PassageSearchResult[];
   indexAvailable: boolean;
-  mode: PassageSearchMode;
 }> {
   const mode = options.mode || DEFAULT_PASSAGE_MODE;
   const store = getStore(options.indexDir);
   const indexAvailable = store !== null;
+  const includeContext = options.includeContext === true;
+  const perDocLimit = normalizePerDocLimit(options.perDocLimit);
+  const debug = options.debug === true;
 
   if (mode === "semantic") {
     if (!store) {
-      return { results: [], indexAvailable: false, mode };
+      return { results: [], indexAvailable: false };
     }
-    const results = await searchSemanticPassages(query, limit, store);
-    return { results, indexAvailable: true, mode };
+    const results = await searchSemanticPassages(query, limit, store, perDocLimit);
+    return {
+      results: toPublicPassageResults(results, includeContext, debug),
+      indexAvailable: true,
+    };
   }
 
-  const results = await searchKeywordPassages(query, limit, options.database, store);
-  return { results, indexAvailable, mode };
+  const results = await searchKeywordPassages(query, limit, options.database, store, perDocLimit);
+  return {
+    results: toPublicPassageResults(results, includeContext, debug),
+    indexAvailable,
+  };
 }
 
 async function searchKeywordPassages(
@@ -122,9 +151,10 @@ async function searchKeywordPassages(
   limit: number,
   database: string | undefined,
   store: VectorStore | null,
-): Promise<PassageSearchResult[]> {
+  perDocLimit?: number,
+): Promise<InternalPassageResult[]> {
   if (store) {
-    return searchIndexedKeywordPassages(query, limit, database, store);
+    return searchIndexedKeywordPassages(query, limit, database, store, perDocLimit);
   }
 
   const documentCandidates = await collectKeywordDocuments(query, database, limit, null);
@@ -147,6 +177,8 @@ async function searchKeywordPassages(
         docName: doc.docName,
         database: doc.database,
         text: unit.text,
+        excerpt: unit.text,
+        contextText: unit.text,
         passageIndex: unit.passageIndex,
         passageIndexStart: unit.passageIndex,
         passageIndexEnd: unit.passageIndex,
@@ -162,7 +194,7 @@ async function searchKeywordPassages(
   }
 
   candidatePassages.sort((a, b) => b.score - a.score);
-  return postProcessPassages(query, candidatePassages, limit, "keyword");
+  return postProcessPassages(query, candidatePassages, limit, "keyword", perDocLimit);
 }
 
 function searchIndexedKeywordPassages(
@@ -170,7 +202,8 @@ function searchIndexedKeywordPassages(
   limit: number,
   database: string | undefined,
   store: VectorStore,
-): PassageSearchResult[] {
+  perDocLimit?: number,
+): InternalPassageResult[] {
   const candidatePassages: CandidatePassage[] = [];
   const documentBestScores = new Map<string, number>();
   const titleScores = new Map<string, number>();
@@ -196,6 +229,8 @@ function searchIndexedKeywordPassages(
       docName: chunk.docName,
       database: chunk.database,
       text: chunk.text,
+      excerpt: chunk.text,
+      contextText: chunk.text,
       passageIndex: chunk.chunkIndex,
       passageIndexStart: chunk.chunkIndex,
       passageIndexEnd: chunk.chunkIndex,
@@ -216,7 +251,7 @@ function searchIndexedKeywordPassages(
   }
 
   candidatePassages.sort((a, b) => b.score - a.score);
-  return postProcessPassages(query, candidatePassages, limit, "keyword");
+  return postProcessPassages(query, candidatePassages, limit, "keyword", perDocLimit);
 }
 
 async function getPassageUnitsForDocument(
@@ -242,7 +277,8 @@ async function searchSemanticPassages(
   query: string,
   limit: number,
   store: VectorStore,
-): Promise<PassageSearchResult[]> {
+  perDocLimit?: number,
+): Promise<InternalPassageResult[]> {
   const embedder = getEmbedder();
   const queryVector = await embedder.embedQuery(query);
   const candidatePoolSize = Math.max(
@@ -260,6 +296,8 @@ async function searchSemanticPassages(
         docName: r.docName,
         database: r.database,
         text: r.text,
+        excerpt: r.text,
+        contextText: r.text,
         passageIndex: r.chunkIndex,
         passageIndexStart: r.chunkIndex,
         passageIndexEnd: r.chunkIndex,
@@ -274,7 +312,7 @@ async function searchSemanticPassages(
     })
     .sort((a, b) => b.score - a.score);
 
-  return postProcessPassages(query, candidates, limit, "semantic");
+  return postProcessPassages(query, candidates, limit, "semantic", perDocLimit);
 }
 
 async function collectKeywordDocuments(
@@ -503,7 +541,8 @@ function postProcessPassages(
   candidates: CandidatePassage[],
   limit: number,
   mode: PassageSearchMode,
-): PassageSearchResult[] {
+  perDocLimit?: number,
+): InternalPassageResult[] {
   const byDoc = new Map<string, Map<number, CandidatePassage>>();
   for (const candidate of candidates) {
     let docMap = byDoc.get(candidate.uuid);
@@ -516,7 +555,7 @@ function postProcessPassages(
 
   const usedIndexes = new Map<string, Set<number>>();
   const countsByDoc = new Map<string, number>();
-  const out: PassageSearchResult[] = [];
+  const out: InternalPassageResult[] = [];
 
   for (const candidate of candidates) {
     if (out.length >= limit) break;
@@ -524,8 +563,10 @@ function postProcessPassages(
     const usedForDoc = getOrCreateSet(usedIndexes, candidate.uuid);
     if (usedForDoc.has(candidate.passageIndex)) continue;
 
-    const countForDoc = countsByDoc.get(candidate.uuid) || 0;
-    if (countForDoc >= DEFAULT_PASSAGES_PER_DOCUMENT) continue;
+    if (typeof perDocLimit === "number") {
+      const countForDoc = countsByDoc.get(candidate.uuid) || 0;
+      if (countForDoc >= perDocLimit) continue;
+    }
 
     const docMap = byDoc.get(candidate.uuid);
     if (!docMap) continue;
@@ -534,7 +575,7 @@ function postProcessPassages(
     for (let i = merged.passageIndexStart; i <= merged.passageIndexEnd; i++) {
       usedForDoc.add(i);
     }
-    countsByDoc.set(candidate.uuid, countForDoc + 1);
+    countsByDoc.set(candidate.uuid, (countsByDoc.get(candidate.uuid) || 0) + 1);
     out.push(merged);
   }
 
@@ -547,7 +588,7 @@ function mergeAdjacentPassages(
   docMap: Map<number, CandidatePassage>,
   usedForDoc: Set<number>,
   mode: PassageSearchMode,
-): PassageSearchResult {
+): InternalPassageResult {
   let start = seed.passageIndex;
   let end = seed.passageIndex;
   let mergedCount = 1;
@@ -578,13 +619,16 @@ function mergeAdjacentPassages(
     pieces.map((p) => p.text),
     mode === "semantic" ? DEFAULT_CHUNK_OVERLAP_CHARS : 0,
   );
+  const excerpt = createExcerpt(mergedText, query);
   const best = pieces.reduce((acc, cur) => (cur.score > acc.score ? cur : acc), pieces[0]);
 
   return {
     uuid: best.uuid,
     docName: best.docName,
     database: best.database,
-    text: createExcerpt(mergedText, query),
+    text: mergedText,
+    excerpt,
+    contextText: mergedText,
     passageIndex: start,
     passageIndexStart: start,
     passageIndexEnd: end,
@@ -810,4 +854,36 @@ function getOrCreateSet(map: Map<string, Set<number>>, key: string): Set<number>
   const created = new Set<number>();
   map.set(key, created);
   return created;
+}
+
+function normalizePerDocLimit(input?: number): number | undefined {
+  if (typeof input !== "number" || !Number.isFinite(input) || input <= 0) return undefined;
+  return Math.floor(input);
+}
+
+function toPublicPassageResults(
+  results: InternalPassageResult[],
+  includeContext: boolean,
+  debug: boolean,
+): PassageSearchResult[] {
+  return results.map((result) => ({
+    uuid: result.uuid,
+    docName: result.docName,
+    excerpt: result.excerpt,
+    score: result.score,
+    citationKey: result.citationKey,
+    ...(includeContext ? { contextText: result.contextText } : {}),
+    ...(debug
+      ? {
+          database: result.database,
+          passageIndex: result.passageIndex,
+          passageIndexStart: result.passageIndexStart,
+          passageIndexEnd: result.passageIndexEnd,
+          mergedPassageCount: result.mergedPassageCount,
+          documentScore: result.documentScore,
+          passageScore: result.passageScore,
+          mode: result.mode,
+        }
+      : {}),
+  }));
 }

@@ -132,7 +132,7 @@ function printHelp(): void {
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--mode <keyword|semantic>] [--index-dir <path>]
+  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>]
   dtx documents get --uuid <recordUuid> [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -249,6 +249,7 @@ async function run(): Promise<never> {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
       }
       const limit = getNumberFlag(parsed.flags, "limit");
+      const perDocLimit = getNumberFlag(parsed.flags, "per-doc", "perdoc");
       const indexDir = toIndexDir(parsed.flags);
       const mode = getStringFlag(parsed.flags, "mode");
       if (mode && mode !== "keyword" && mode !== "semantic") {
@@ -258,6 +259,9 @@ async function run(): Promise<never> {
         database: getStringFlag(parsed.flags, "database"),
         indexDir,
         mode: mode as "keyword" | "semantic" | undefined,
+        includeContext: getBoolFlag(parsed.flags, "context"),
+        perDocLimit,
+        debug: getBoolFlag(parsed.flags, "debug"),
       });
       emitOk(data, { ...commonMeta(), indexDir });
     }
