@@ -5,12 +5,18 @@
  * Default output is JSON. Progress logs are written to stderr.
  */
 
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import * as dt from "./bridge/devonthink.js";
 import { buildIndex, getIndexStatus } from "./rag/index-manager.js";
 import { resetStoreCache, searchPassages } from "./rag/passage-search.js";
 import { getIndexDir } from "./rag/store.js";
 
 const DEFAULT_GROUP_UUID = "33203673-B7E2-4F3F-9D87-6E83EB4781EA";
+const CLI_DIR = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_JSON_PATH = resolve(CLI_DIR, "..", "package.json");
 
 type FlagValue = string | boolean;
 
@@ -127,8 +133,122 @@ function emitError(
   process.exit(1);
 }
 
+function getPackageVersion(): string {
+  try {
+    const raw = readFileSync(PACKAGE_JSON_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as { version?: string };
+    return parsed.version || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function parseDotEnv(path: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!existsSync(path)) return out;
+  const raw = readFileSync(path, "utf-8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx <= 0) continue;
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function getDotEnvDiagnostics(): {
+  found: boolean;
+  path: string;
+  keys: string[];
+  googleApiKey: boolean;
+  openaiApiKey: boolean;
+  embeddingProvider?: string;
+} {
+  const dotEnvPath = resolve(process.cwd(), ".env");
+  const parsed = parseDotEnv(dotEnvPath);
+  return {
+    found: existsSync(dotEnvPath),
+    path: dotEnvPath,
+    keys: Object.keys(parsed).sort(),
+    googleApiKey: typeof parsed.GOOGLE_API_KEY === "string" && parsed.GOOGLE_API_KEY.length > 0,
+    openaiApiKey: typeof parsed.OPENAI_API_KEY === "string" && parsed.OPENAI_API_KEY.length > 0,
+    embeddingProvider: parsed.EMBEDDING_PROVIDER || undefined,
+  };
+}
+
+function getResolvedSemanticProvider(dotEnv: { embeddingProvider?: string }): "gemini" | "openai" {
+  const provider =
+    process.env.EMBEDDING_PROVIDER ||
+    dotEnv.embeddingProvider ||
+    "gemini";
+  return provider === "openai" ? "openai" : "gemini";
+}
+
+function buildVersionInfo(): Record<string, unknown> {
+  return {
+    name: "dtx",
+    version: getPackageVersion(),
+    node: process.version,
+    scriptPath: process.argv[1] || null,
+    realScriptPath: process.argv[1] ? realpathSync(process.argv[1]) : null,
+    cwd: process.cwd(),
+  };
+}
+
+function buildDoctorInfo(indexDir?: string): Record<string, unknown> {
+  const dotEnv = getDotEnvDiagnostics();
+  const provider = getResolvedSemanticProvider(dotEnv);
+  const processGoogle = Boolean(process.env.GOOGLE_API_KEY);
+  const processOpenAI = Boolean(process.env.OPENAI_API_KEY);
+  const semanticReadyFromProcessEnv =
+    provider === "gemini" ? processGoogle : processOpenAI;
+  const status = getIndexStatus(indexDir);
+  const resolvedIndexDir = getIndexDir(indexDir);
+
+  return {
+    ...buildVersionInfo(),
+    semantic: {
+      provider,
+      readyFromProcessEnv: semanticReadyFromProcessEnv,
+      googleApiKeyInProcessEnv: processGoogle,
+      openaiApiKeyInProcessEnv: processOpenAI,
+      note:
+        dotEnv.found && !semanticReadyFromProcessEnv
+          ? "A .env file exists in cwd, but dtx does not auto-load .env; export env vars before running."
+          : undefined,
+    },
+    dotEnv,
+    index: status
+      ? {
+          available: true,
+          indexDir: resolvedIndexDir,
+          totalDocuments: status.totalDocuments,
+          totalChunks: status.totalChunks,
+          lastUpdated: status.lastUpdated,
+          embeddingProvider: status.embeddingProvider,
+          embeddingModel: status.embeddingModel,
+          dimensions: status.dimensions,
+        }
+      : {
+          available: false,
+          indexDir: resolvedIndexDir,
+        },
+  };
+}
+
 function printHelp(): void {
   console.log(`Usage:
+  dtx version
+  dtx doctor [--index-dir <path>]
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
@@ -163,6 +283,14 @@ async function run(): Promise<never> {
   });
 
   try {
+    if (namespace === "version") {
+      emitOk(buildVersionInfo(), commonMeta());
+    }
+
+    if (namespace === "doctor") {
+      emitOk(buildDoctorInfo(getStringFlag(parsed.flags, "index-dir")), commonMeta());
+    }
+
     // ─── databases list ───
     if (namespace === "databases" && action === "list") {
       const data = await dt.listDatabases();

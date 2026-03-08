@@ -72,6 +72,8 @@ Error shape:
 ## Commands
 
 ```bash
+dtx version
+dtx doctor [--index-dir <path>]
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
@@ -190,7 +192,11 @@ Set env vars in your shell/profile (or pass inline per command). Important ones:
 - `CHUNK_MIN_CHARS`
 - `CHUNK_SHARD_SIZE`
 
-`dtx` does not read `.env` files automatically.
+`dtx` does not read `.env` files automatically. Use `dtx doctor` to distinguish:
+
+- whether the current `process.env` already contains the required keys
+- whether a `.env` file exists in the current working directory
+- whether semantic search is actually runnable right now
 
 Example:
 

@@ -39,6 +39,8 @@ There are two fundamentally different search paths. Choose based on what the use
 
 ### Browse & Explore
 ```bash
+dtx version
+dtx doctor [--index-dir <path>]
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 ```
@@ -89,6 +91,8 @@ dtx index status [--index-dir <path>]
 **`--context`** — Adds `contextText` (full chunk text) alongside the short `excerpt`. Useful when the excerpt alone is insufficient to understand the passage.
 
 **`--mode semantic`** — Embeds the query and performs cosine similarity search over the local vector index, then re-ranks with lexical signals. Requires an embedding API key (`GOOGLE_API_KEY` for Gemini, `OPENAI_API_KEY` for OpenAI).
+
+**`dtx doctor`** — Reports the current runtime environment for the CLI, including version info, semantic-search readiness from `process.env`, whether a `.env` exists in the current working directory, and index availability. This is useful because `dtx` does not auto-load `.env`.
 
 **`documents related`** — Calls DEVONthink's See Also / `compare()` API. Returns documents similar to a known UUID without a text query.
 
