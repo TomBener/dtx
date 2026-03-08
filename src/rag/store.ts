@@ -266,6 +266,16 @@ export class VectorStore {
     return undefined;
   }
 
+  /** Get a document-level database name (first chunk match). */
+  getDatabaseByUuid(uuid: string): string | undefined {
+    for (const chunk of this.chunks) {
+      if (chunk.uuid === uuid) {
+        return chunk.database;
+      }
+    }
+    return undefined;
+  }
+
   /** Get UUID set for documents that already have citation keys in index. */
   getCitationKeyUuidSet(): Set<string> {
     const out = new Set<string>();

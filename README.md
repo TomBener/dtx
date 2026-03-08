@@ -7,7 +7,7 @@ An agent-friendly CLI for read-only DEVONthink access with optional semantic ind
 ## Key Features
 
 - Read-only DEVONthink operations (search/read/browse)
-- Document search, passage search, and related-document lookup
+- Document search, keyword-first passage search, and related-document lookup
 - Citation key mapping via bibliography JSON (`file -> id`)
 - Default JSON output for easy AI-agent integration
 - Configurable index directory per command (`--index-dir`)
@@ -16,8 +16,8 @@ An agent-friendly CLI for read-only DEVONthink access with optional semantic ind
 
 - macOS with DEVONthink 4.2+
 - Node.js 20+
-- Gemini or OpenAI key for embedding/index commands
-- `databases/groups/documents` commands do not require embedding API keys
+- Gemini or OpenAI key for indexing and `search passages --mode semantic`
+- `databases/groups/documents` commands and keyword passage search do not require embedding API keys
 
 ## Install (Homebrew)
 
@@ -75,7 +75,7 @@ Error shape:
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-dtx search passages --query "<q>" [--limit <n>] [--index-dir <path>]
+dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--mode <keyword|semantic>] [--index-dir <path>]
 
 dtx documents get --uuid <recordUuid> [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -114,6 +114,13 @@ Defaults for `dtx index build`:
 - Markdown files are excluded unless `--include-md` is provided
 - `--content-max-length` defaults to no truncation (`0` also means no truncation)
 - Semantic chunking defaults to `800` chars with `120` chars of overlap
+
+`dtx search passages` defaults to `--mode keyword`:
+
+- It uses DEVONthink keyword search to retrieve candidate documents
+- Then extracts and ranks matching passages locally
+- If an index is available, passage search is scoped to the indexed document set and can use citation keys from the index
+- Use `--mode semantic` to query the local vector index instead
 
 ## Configuration (Environment Variables)
 

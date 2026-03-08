@@ -132,7 +132,7 @@ function printHelp(): void {
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
   dtx search documents --query "<q>" [--database <name>] [--limit <n>]
-  dtx search passages --query "<q>" [--limit <n>] [--index-dir <path>]
+  dtx search passages --query "<q>" [--database <name>] [--limit <n>] [--mode <keyword|semantic>] [--index-dir <path>]
   dtx documents get --uuid <recordUuid> [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -250,7 +250,15 @@ async function run(): Promise<never> {
       }
       const limit = getNumberFlag(parsed.flags, "limit");
       const indexDir = toIndexDir(parsed.flags);
-      const data = await searchPassages(query, limit, indexDir);
+      const mode = getStringFlag(parsed.flags, "mode");
+      if (mode && mode !== "keyword" && mode !== "semantic") {
+        emitError("INVALID_ARGUMENT", 'Invalid --mode. Expected "keyword" or "semantic".');
+      }
+      const data = await searchPassages(query, limit, {
+        database: getStringFlag(parsed.flags, "database"),
+        indexDir,
+        mode: mode as "keyword" | "semantic" | undefined,
+      });
       emitOk(data, { ...commonMeta(), indexDir });
     }
 
