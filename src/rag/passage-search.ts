@@ -57,7 +57,15 @@ export async function searchPassages(
 
   const embedder = getEmbedder();
   const queryVector = await embedder.embedQuery(query);
-  const results = store.search(queryVector, limit);
+  const candidatePoolSize = Math.max(limit * 20, 200);
+  const results = store
+    .search(queryVector, candidatePoolSize)
+    .map((r) => ({
+      ...r,
+      score: rerankPassageScore(query, r.text, r.score),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 
   return {
     results: results.map((r) => ({
@@ -71,4 +79,70 @@ export async function searchPassages(
     })),
     indexAvailable: true,
   };
+}
+
+function rerankPassageScore(query: string, text: string, semanticScore: number): number {
+  return Math.min(1, semanticScore + computeLexicalBoost(query, text));
+}
+
+function computeLexicalBoost(query: string, text: string): number {
+  const normalizedQuery = normalizeForMatch(query);
+  const normalizedText = normalizeForMatch(text);
+  if (!normalizedQuery || !normalizedText) return 0;
+
+  let boost = 0;
+
+  if (normalizedText.includes(normalizedQuery)) {
+    boost += 0.2;
+  }
+
+  const phrases = extractMatchPhrases(normalizedQuery);
+  let bestMatchedLength = 0;
+  let matchedCount = 0;
+
+  for (const phrase of phrases) {
+    if (!phrase || !normalizedText.includes(phrase)) continue;
+    matchedCount++;
+    if (phrase.length > bestMatchedLength) bestMatchedLength = phrase.length;
+  }
+
+  if (bestMatchedLength >= 6) boost += 0.14;
+  else if (bestMatchedLength >= 4) boost += 0.1;
+  else if (bestMatchedLength >= 3) boost += 0.06;
+  else if (bestMatchedLength >= 2) boost += 0.03;
+
+  if (matchedCount > 1) {
+    boost += Math.min(0.06, (matchedCount - 1) * 0.01);
+  }
+
+  return boost;
+}
+
+function extractMatchPhrases(normalizedQuery: string): string[] {
+  const phrases = new Set<string>();
+  const tokens = normalizedQuery
+    .split(/[^\p{L}\p{N}\p{Script=Han}]+/u)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+
+  for (const token of tokens) {
+    phrases.add(token);
+
+    // For longer CJK queries like "梅贻琦说过的话", include shorter exact subphrases
+    // so that named entities inside a longer natural-language query are rewarded.
+    if (/^\p{Script=Han}+$/u.test(token) && token.length >= 4) {
+      const maxLen = Math.min(6, token.length);
+      for (let len = 3; len <= maxLen; len++) {
+        for (let i = 0; i <= token.length - len; i++) {
+          phrases.add(token.slice(i, i + len));
+        }
+      }
+    }
+  }
+
+  return [...phrases];
+}
+
+function normalizeForMatch(input: string): string {
+  return input.trim().normalize("NFKC").toLowerCase().replace(/\s+/g, " ");
 }
