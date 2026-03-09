@@ -324,7 +324,8 @@ async function run(): Promise<never> {
 
   try {
     if (namespace === "version") {
-      emitOk(buildVersionInfo(), commonMeta());
+      console.log(getPackageVersion());
+      process.exit(0);
     }
 
     if (namespace === "doctor") {
