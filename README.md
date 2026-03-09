@@ -95,6 +95,7 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 
 - Results include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, and `year`
 - `dtx keyword` defaults to the configured Zotero group scope unless you pass `--database` or `--group`
+- `--limit` defaults to `10`
 - Pass `--with-abstract` when you want abstracts included in results
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
 - Bibliographic enrichment is sourced from `bibliography.json`
@@ -103,6 +104,8 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 Queries the local vector index built by `dtx index build` and returns passage-level results. It embeds the query and performs cosine similarity search, then re-ranks with lexical signals.
 
 - `dtx semantic` defaults to the configured Zotero group scope unless you pass `--database` or `--group`
+- `--limit` defaults to `10`
+- `--per-doc` defaults to `2`
 - It supports `--uuid <recordUuid>` and `--citation-key <key>` to scope retrieval to a known document
 - With no query plus `--uuid` / `--citation-key`, it returns the document's indexed passages in order
 - `dtx semantic` requires an embedding API key at query time

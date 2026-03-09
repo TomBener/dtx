@@ -48,9 +48,10 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 ### Search
 ```bash
 # DEVONthink native retrieval — document-level, operators supported
-dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]  # default limit: 10
 
 # Local index retrieval — passage-level
+# default limit: 10; default per-doc: 2
 dtx semantic [--query "<q>"] \
   [--database <name>] \
   [--group <uuid>] \
@@ -86,6 +87,8 @@ dtx index status [--index-dir <path>]
 ## Key Behaviors
 
 **Default scope** — `keyword`, `semantic`, and `index build` default to group `33203673-B7E2-4F3F-9D87-6E83EB4781EA` unless overridden. Pass `--group <uuid>` to use another group. Pass `--database <name>` to search/build by database instead; if you provide both `--database` and `--group`, both constraints apply.
+
+**`--limit 10`** (default) — Caps the number of returned results for both `dtx keyword` and `dtx semantic`.
 
 **`--citation-key <key>`** — With no query, `dtx semantic` retrieves all indexed chunks for a document identified by its citation key (e.g. `shucksmith2018rrr`), merges adjacent chunks into consecutive passages, and returns them in chunk order. With `--query`, retrieval is restricted to that document.
 
