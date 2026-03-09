@@ -264,7 +264,7 @@ function printHelp(): void {
   console.log(`Usage:
   dtx version
   dtx doctor [--index-dir <path>]
-  dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+  dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--abstract]
   dtx semantic [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
@@ -312,12 +312,6 @@ async function run(): Promise<never> {
 
     // ─── keyword ───
     if (namespace === "keyword") {
-      if (hasFlag(parsed.flags, "mode")) {
-        emitError(
-          "INVALID_ARGUMENT",
-          'The --mode flag has been removed. Use "dtx keyword" or "dtx semantic" directly.',
-        );
-      }
       const query = getStringFlag(parsed.flags, "query") || trailingPositionals.join(" ");
       if (!query) {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
@@ -326,7 +320,9 @@ async function run(): Promise<never> {
       const groupUuid = getEffectiveGroupUuid(parsed.flags);
       const limit = getNumberFlag(parsed.flags, "limit");
       const data = await dt.searchDocuments(query, database, limit, {
-        includeAbstract: getBoolFlag(parsed.flags, "with-abstract"),
+        includeAbstract: hasFlag(parsed.flags, "abstract")
+          ? getBoolFlag(parsed.flags, "abstract")
+          : true,
         groupUuid,
       });
       emitOk(data, { ...commonMeta(), ...(groupUuid ? { groupUuid } : {}) });
@@ -334,12 +330,6 @@ async function run(): Promise<never> {
 
     // ─── semantic ───
     if (namespace === "semantic") {
-      if (hasFlag(parsed.flags, "mode")) {
-        emitError(
-          "INVALID_ARGUMENT",
-          'The --mode flag has been removed. Use "dtx semantic" directly.',
-        );
-      }
       const query = getStringFlag(parsed.flags, "query") || trailingPositionals.join(" ");
       const uuid = getStringFlag(parsed.flags, "uuid");
       const hasCitationKey = Boolean(getStringFlag(parsed.flags, "citation-key"));

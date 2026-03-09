@@ -48,7 +48,7 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 ### Search
 ```bash
 # DEVONthink native retrieval — document-level, operators supported
-dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]  # default limit: 10
+dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--abstract]  # default limit: 10; abstracts included by default
 
 # Local index retrieval — passage-level
 # default limit: 10; default per-doc: 2

@@ -74,7 +74,7 @@ Error shape:
 ```bash
 dtx version
 dtx doctor [--index-dir <path>]
-dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--abstract]
 dtx semantic [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
@@ -96,7 +96,7 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 - Results include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, and `year`
 - `dtx keyword` defaults to the configured Zotero group scope unless you pass `--database` or `--group`
 - `--limit` defaults to `10`
-- Pass `--with-abstract` when you want abstracts included in results
+- Abstracts are included in results by default; `--abstract` is accepted for explicitness
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
 - Bibliographic enrichment is sourced from `bibliography.json`
 
