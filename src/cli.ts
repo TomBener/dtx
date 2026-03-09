@@ -111,6 +111,20 @@ function getNumberFlag(
   return n;
 }
 
+function hasFlag(flags: Record<string, FlagValue>, ...keys: string[]): boolean {
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(flags, key));
+}
+
+function getEffectiveGroupUuid(flags: Record<string, FlagValue>): string | undefined {
+  if (hasFlag(flags, "group")) {
+    return getStringFlag(flags, "group");
+  }
+  if (hasFlag(flags, "database")) {
+    return undefined;
+  }
+  return process.env.DT_DEFAULT_GROUP_UUID || DEFAULT_GROUP_UUID;
+}
+
 function toIndexDir(flags: Record<string, FlagValue>): string {
   const fromCli = getStringFlag(flags, "index-dir");
   return getIndexDir(fromCli);
@@ -252,8 +266,8 @@ function printHelp(): void {
   dtx doctor [--index-dir <path>]
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
-  dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
-  dtx search passages [--query "<q>"] [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
+  dtx search documents --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+  dtx search passages [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -262,7 +276,8 @@ function printHelp(): void {
 Notes:
   - Default output is JSON (stdout)
   - Progress logs are emitted on stderr
-  - Default group for "dtx index build": ${DEFAULT_GROUP_UUID}
+  - Default search/index group: ${process.env.DT_DEFAULT_GROUP_UUID || DEFAULT_GROUP_UUID}
+  - Passing --database disables the default group unless --group is also provided
   - Markdown files are excluded by default; use --include-md to include them
   - content-max-length default: no truncation (set a positive number to cap content)
   - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography/dtx-index
@@ -313,11 +328,13 @@ async function run(): Promise<never> {
         emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
       }
       const database = getStringFlag(parsed.flags, "database");
+      const groupUuid = getEffectiveGroupUuid(parsed.flags);
       const limit = getNumberFlag(parsed.flags, "limit");
       const data = await dt.searchDocuments(query, database, limit, {
         includeAbstract: getBoolFlag(parsed.flags, "with-abstract"),
+        groupUuid,
       });
-      emitOk(data, commonMeta());
+      emitOk(data, { ...commonMeta(), ...(groupUuid ? { groupUuid } : {}) });
     }
 
     // ─── documents get ───
@@ -366,7 +383,7 @@ async function run(): Promise<never> {
       const indexDir = toIndexDir(parsed.flags);
       const stats = await buildIndex({
         database: getStringFlag(parsed.flags, "database"),
-        groupUuid: getStringFlag(parsed.flags, "group") || DEFAULT_GROUP_UUID,
+        groupUuid: getEffectiveGroupUuid(parsed.flags),
         bibliographyPath: getStringFlag(parsed.flags, "bib", "bibliography"),
         excludeMarkdown: !includeMd,
         force: getBoolFlag(parsed.flags, "force"),
@@ -410,6 +427,7 @@ async function run(): Promise<never> {
       const limit = getNumberFlag(parsed.flags, "limit");
       const perDocLimit = getNumberFlag(parsed.flags, "per-doc", "perdoc");
       const indexDir = toIndexDir(parsed.flags);
+      const groupUuid = getEffectiveGroupUuid(parsed.flags);
       const mode = getStringFlag(parsed.flags, "mode");
       if (mode && mode !== "keyword" && mode !== "semantic") {
         emitError(
@@ -419,6 +437,7 @@ async function run(): Promise<never> {
       }
       const data = await searchPassages(query, limit, {
         database: getStringFlag(parsed.flags, "database"),
+        groupUuid,
         indexDir,
         mode: mode as "keyword" | "semantic" | undefined,
         includeContext: getBoolFlag(parsed.flags, "context"),
@@ -427,7 +446,7 @@ async function run(): Promise<never> {
         uuid,
         citationKey: getStringFlag(parsed.flags, "citation-key"),
       });
-      emitOk(data, { ...commonMeta(), indexDir });
+      emitOk(data, { ...commonMeta(), indexDir, ...(groupUuid ? { groupUuid } : {}) });
     }
 
     emitError(

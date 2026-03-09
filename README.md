@@ -76,8 +76,8 @@ dtx version
 dtx doctor [--index-dir <path>]
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
-dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
-dtx search passages [--query "<q>"] [--database <name>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
+dtx search documents --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+dtx search passages [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
 
 dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
@@ -94,6 +94,7 @@ There are two distinct search paths:
 Passes the query directly to DEVONthink's search engine and returns document-level results. Supports all DEVONthink search operators: `NEAR`, `AND`, `OR`, `NOT`, wildcards, field qualifiers (`name:`, `tag:`, etc.), and parentheses. Use this for coarse filtering or when you need operator-based queries.
 
 - Results now include `path` and, when resolvable from bibliography JSON, `citationKey`, `author`, and `year`
+- `dtx search documents` defaults to the configured Zotero group scope unless you pass `--database` or `--group`
 - Pass `--with-abstract` when you want abstracts included in document search results
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
 - Bibliographic enrichment is sourced from `bibliography.json`
@@ -103,6 +104,8 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 Queries the local vector index built by `dtx index build` and returns passage-level results. Requires a local index. Two modes:
 - `--mode keyword` (default): lexical matching over indexed chunks
 - `--mode semantic`: embeds the query and performs cosine similarity search, then re-ranks with lexical signals
+
+Like document search, passage search defaults to the configured Zotero group scope unless you pass `--database` or `--group`.
 
 Only `--mode semantic` requires an embedding API key at query time.
 
@@ -159,8 +162,8 @@ dtx index build \
 
 Defaults for `dtx index build`:
 
-- Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA`
-- Database: all databases (omit `--database` to scan all)
+- Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA` (or `DT_DEFAULT_GROUP_UUID`)
+- Database: omitted by default; passing `--database` disables the default group unless `--group` is also provided
 - Bibliography path: `~/Library/CloudStorage/Dropbox/bibliography/bibliography.json` (or `BIBLIOGRAPHY_JSON_PATH` env)
 - Markdown files are excluded unless `--include-md` is provided
 - `--content-max-length` defaults to no truncation (`0` also means no truncation)
@@ -169,6 +172,7 @@ Defaults for `dtx index build`:
 
 `dtx search passages` requires a local index (`dtx index build`) and defaults to `--mode keyword`:
 
+- By default, passage search is limited to group `33203673-B7E2-4F3F-9D87-6E83EB4781EA` (or `DT_DEFAULT_GROUP_UUID`)
 - Scans indexed chunks with lexical matching
 - By default, results return only `excerpt`; pass `--context` to also include `contextText`
 - By default, at most 2 passages per document are returned; use `--per-doc <n>` to change (0 for no cap)
@@ -188,6 +192,7 @@ Set env vars in your shell/profile (or pass inline per command). Important ones:
 - `OPENAI_API_KEY` (when `EMBEDDING_PROVIDER=openai`)
 - `BIBLIOGRAPHY_JSON_PATH`
 - `DT_INDEX_DIR`
+- `DT_DEFAULT_GROUP_UUID`
 - `LIST_ALL_RECORDS_TIMEOUT_MS`
 - `INDEX_CRAWL_HEARTBEAT_MS`
 - `CHUNK_MAX_CHARS`
@@ -208,6 +213,7 @@ export EMBEDDING_PROVIDER=gemini
 export GOOGLE_API_KEY=your_key
 export BIBLIOGRAPHY_JSON_PATH="$HOME/Library/CloudStorage/Dropbox/bibliography/bibliography.json"
 export DT_INDEX_DIR="$HOME/Library/CloudStorage/Dropbox/bibliography/dtx-index"
+export DT_DEFAULT_GROUP_UUID="33203673-B7E2-4F3F-9D87-6E83EB4781EA"
 ```
 
 ## Safety

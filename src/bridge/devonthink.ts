@@ -52,6 +52,7 @@ interface DocumentSearchResult {
 interface SearchDocumentOptions {
   bibliographyPath?: string;
   includeAbstract?: boolean;
+  groupUuid?: string;
 }
 
 interface RawDocumentContentResult {
@@ -180,7 +181,7 @@ export async function searchDocuments(
   options: SearchDocumentOptions = {},
 ) {
   const results = await runJXAJSON<RawDocumentSearchResult[]>(
-    searchScript(query, database, limit),
+    searchScript(query, database, options.groupUuid, limit),
   );
   const bibliography = loadCitationMap(options.bibliographyPath);
 

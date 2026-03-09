@@ -48,11 +48,12 @@ dtx groups list [--uuid <groupUuid>] [--limit <n>]
 ### Search
 ```bash
 # DEVONthink native search — document-level, operators supported
-dtx search documents --query "<q>" [--database <name>] [--limit <n>] [--with-abstract]
+dtx search documents --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
 
 # Local index search — passage-level
 dtx search passages [--query "<q>"] \
   [--database <name>] \
+  [--group <uuid>] \
   [--limit <n>] \
   [--per-doc <n>]          # default: 2 passages per doc
   [--mode keyword|semantic] # default: keyword
@@ -72,7 +73,7 @@ dtx documents related --uuid <recordUuid> [--limit <n>]
 ### Index Management
 ```bash
 dtx index build \
-  [--database <name>]          # default: all databases
+  [--database <name>]          # disables default group unless --group is also passed
   [--group <uuid>]             # limit to a group subtree
   [--bib <path>]               # bibliography JSON for citation key mapping
   [--index-dir <path>]
@@ -84,6 +85,8 @@ dtx index status [--index-dir <path>]
 ```
 
 ## Key Behaviors
+
+**Default scope** — `search documents`, `search passages`, and `index build` default to group `33203673-B7E2-4F3F-9D87-6E83EB4781EA` unless overridden. Pass `--group <uuid>` to use another group. Pass `--database <name>` to search/build by database instead; if you provide both `--database` and `--group`, both constraints apply.
 
 **`--citation-key <key>`** — With no query, retrieves all indexed chunks for a document identified by its citation key (e.g. `shucksmith2018rrr`), merges adjacent chunks into consecutive passages, and returns them in chunk order. With `--query`, restricts keyword or semantic passage search to that document.
 
@@ -129,6 +132,7 @@ Index files: `vectors.bin`, `chunks.json`, `chunks.001.json` …, `meta.json`
 | `GOOGLE_API_KEY` | Required for Gemini embeddings |
 | `OPENAI_API_KEY` | Required for OpenAI embeddings |
 | `DT_INDEX_DIR` | Default index directory |
+| `DT_DEFAULT_GROUP_UUID` | Default group scope for search/index commands |
 | `BIBLIOGRAPHY_JSON_PATH` | Default bibliography path |
 
 ## Typical Workflows

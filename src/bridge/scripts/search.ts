@@ -12,27 +12,41 @@ import { escapeForJXA } from "../executor.js";
 export function searchScript(
   query: string,
   database?: string,
+  groupUuid?: string,
   limit: number = 20,
 ): string {
   const q = escapeForJXA(query);
   // JXA's app.databases() returns an ObjectSpecifier which doesn't support ES6 array methods like .find()
   // Must use a for loop for manual lookup
   const dbName = database ? escapeForJXA(database) : "null";
+  const groupFilter = groupUuid ? escapeForJXA(groupUuid) : "null";
 
   return `(() => {
   const app = Application("DEVONthink");
   let dbRoot = null;
+  let scopeRecord = null;
   const dbName = ${dbName};
+  const groupFilter = ${groupFilter};
+  if (groupFilter) {
+    try { scopeRecord = app.getRecordWithUuid(groupFilter); } catch(e) { scopeRecord = null; }
+    if (!scopeRecord) return JSON.stringify({error: "Group not found: " + groupFilter});
+  }
   if (dbName) {
     const allDbs = app.databases();
     for (let i = 0; i < allDbs.length; i++) {
       if (allDbs[i].name() === dbName) { dbRoot = allDbs[i].root(); break; }
     }
     if (!dbRoot) return JSON.stringify({error: "Database not found: " + dbName});
+    if (scopeRecord) {
+      let scopeDbName = "";
+      try { scopeDbName = scopeRecord.database().name(); } catch(e) { scopeDbName = ""; }
+      if (scopeDbName !== dbName) return JSON.stringify([]);
+    }
   }
   // DT 4.2's search command 'in' parameter requires a record (group) object, not a database object.
   // Use db.root() to get the database's root group as the search scope.
-  const results = dbRoot ? app.search(${q}, {in: dbRoot}) : app.search(${q});
+  const searchScope = scopeRecord || dbRoot || null;
+  const results = searchScope ? app.search(${q}, {in: searchScope}) : app.search(${q});
   const limit = Math.min(results.length, ${limit});
   const out = [];
   for (let i = 0; i < limit; i++) {
