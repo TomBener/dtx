@@ -264,10 +264,10 @@ function printHelp(): void {
   console.log(`Usage:
   dtx version
   dtx doctor [--index-dir <path>]
+  dtx keyword --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
+  dtx semantic [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
-  dtx search documents --query "<q>" [--database <name>] [--group <uuid>] [--limit <n>] [--with-abstract]
-  dtx search passages [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--mode <keyword|semantic>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -288,6 +288,9 @@ async function run(): Promise<never> {
   const startedAt = Date.now();
   const parsed = parseArgs(process.argv.slice(2));
   const [namespace, action, ...rest] = parsed.positionals;
+  const trailingPositionals = [action, ...rest].filter(
+    (value): value is string => typeof value === "string",
+  );
 
   if (!namespace || namespace === "help" || getBoolFlag(parsed.flags, "help", "h")) {
     printHelp();
@@ -307,6 +310,69 @@ async function run(): Promise<never> {
       emitOk(buildDoctorInfo(getStringFlag(parsed.flags, "index-dir")), commonMeta());
     }
 
+    // ─── keyword ───
+    if (namespace === "keyword") {
+      if (hasFlag(parsed.flags, "mode")) {
+        emitError(
+          "INVALID_ARGUMENT",
+          'The --mode flag has been removed. Use "dtx keyword" or "dtx semantic" directly.',
+        );
+      }
+      const query = getStringFlag(parsed.flags, "query") || trailingPositionals.join(" ");
+      if (!query) {
+        emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
+      }
+      const database = getStringFlag(parsed.flags, "database");
+      const groupUuid = getEffectiveGroupUuid(parsed.flags);
+      const limit = getNumberFlag(parsed.flags, "limit");
+      const data = await dt.searchDocuments(query, database, limit, {
+        includeAbstract: getBoolFlag(parsed.flags, "with-abstract"),
+        groupUuid,
+      });
+      emitOk(data, { ...commonMeta(), ...(groupUuid ? { groupUuid } : {}) });
+    }
+
+    // ─── semantic ───
+    if (namespace === "semantic") {
+      if (hasFlag(parsed.flags, "mode")) {
+        emitError(
+          "INVALID_ARGUMENT",
+          'The --mode flag has been removed. Use "dtx semantic" directly.',
+        );
+      }
+      const query = getStringFlag(parsed.flags, "query") || trailingPositionals.join(" ");
+      const uuid = getStringFlag(parsed.flags, "uuid");
+      const hasCitationKey = Boolean(getStringFlag(parsed.flags, "citation-key"));
+      if (uuid && hasCitationKey) {
+        emitError(
+          "INVALID_ARGUMENT",
+          "Provide either --uuid <recordUuid> or --citation-key <key>, not both.",
+        );
+      }
+      if (!query && !hasCitationKey && !uuid) {
+        emitError(
+          "MISSING_ARGUMENT",
+          'Missing required argument: --query "<text>" or --citation-key <key> or --uuid <recordUuid>',
+        );
+      }
+      const limit = getNumberFlag(parsed.flags, "limit");
+      const perDocLimit = getNumberFlag(parsed.flags, "per-doc", "perdoc");
+      const indexDir = toIndexDir(parsed.flags);
+      const groupUuid = getEffectiveGroupUuid(parsed.flags);
+      const data = await searchPassages(query, limit, {
+        database: getStringFlag(parsed.flags, "database"),
+        groupUuid,
+        indexDir,
+        mode: "semantic",
+        includeContext: getBoolFlag(parsed.flags, "context"),
+        perDocLimit,
+        debug: getBoolFlag(parsed.flags, "debug"),
+        uuid,
+        citationKey: getStringFlag(parsed.flags, "citation-key"),
+      });
+      emitOk(data, { ...commonMeta(), indexDir, ...(groupUuid ? { groupUuid } : {}) });
+    }
+
     // ─── databases list ───
     if (namespace === "databases" && action === "list") {
       const data = await dt.listDatabases();
@@ -319,22 +385,6 @@ async function run(): Promise<never> {
       const limit = getNumberFlag(parsed.flags, "limit");
       const data = await dt.listGroupContents(uuid, limit);
       emitOk(data, commonMeta());
-    }
-
-    // ─── search documents ───
-    if (namespace === "search" && action === "documents") {
-      const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
-      if (!query) {
-        emitError("MISSING_ARGUMENT", 'Missing required argument: --query "<text>"');
-      }
-      const database = getStringFlag(parsed.flags, "database");
-      const groupUuid = getEffectiveGroupUuid(parsed.flags);
-      const limit = getNumberFlag(parsed.flags, "limit");
-      const data = await dt.searchDocuments(query, database, limit, {
-        includeAbstract: getBoolFlag(parsed.flags, "with-abstract"),
-        groupUuid,
-      });
-      emitOk(data, { ...commonMeta(), ...(groupUuid ? { groupUuid } : {}) });
     }
 
     // ─── documents get ───
@@ -405,48 +455,6 @@ async function run(): Promise<never> {
         });
       }
       emitOk(status, { ...commonMeta(), indexDir });
-    }
-
-    // ─── search passages ───
-    if (namespace === "search" && action === "passages") {
-      const query = getStringFlag(parsed.flags, "query") || rest.join(" ");
-      const uuid = getStringFlag(parsed.flags, "uuid");
-      const hasCitationKey = Boolean(getStringFlag(parsed.flags, "citation-key"));
-      if (uuid && hasCitationKey) {
-        emitError(
-          "INVALID_ARGUMENT",
-          "Provide either --uuid <recordUuid> or --citation-key <key>, not both.",
-        );
-      }
-      if (!query && !hasCitationKey && !uuid) {
-        emitError(
-          "MISSING_ARGUMENT",
-          'Missing required argument: --query "<text>" or --citation-key <key> or --uuid <recordUuid>',
-        );
-      }
-      const limit = getNumberFlag(parsed.flags, "limit");
-      const perDocLimit = getNumberFlag(parsed.flags, "per-doc", "perdoc");
-      const indexDir = toIndexDir(parsed.flags);
-      const groupUuid = getEffectiveGroupUuid(parsed.flags);
-      const mode = getStringFlag(parsed.flags, "mode");
-      if (mode && mode !== "keyword" && mode !== "semantic") {
-        emitError(
-          "INVALID_ARGUMENT",
-          'Invalid --mode. Expected "keyword" or "semantic".',
-        );
-      }
-      const data = await searchPassages(query, limit, {
-        database: getStringFlag(parsed.flags, "database"),
-        groupUuid,
-        indexDir,
-        mode: mode as "keyword" | "semantic" | undefined,
-        includeContext: getBoolFlag(parsed.flags, "context"),
-        perDocLimit,
-        debug: getBoolFlag(parsed.flags, "debug"),
-        uuid,
-        citationKey: getStringFlag(parsed.flags, "citation-key"),
-      });
-      emitOk(data, { ...commonMeta(), indexDir, ...(groupUuid ? { groupUuid } : {}) });
     }
 
     emitError(
