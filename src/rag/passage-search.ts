@@ -9,10 +9,8 @@
 
 import { getEmbedder } from "./embedder.js";
 import { VectorStore, getIndexDir, indexExists } from "./store.js";
-import * as dt from "../bridge/devonthink.js";
 
 const storeCache = new Map<string, VectorStore>();
-const groupRecordCache = new Map<string, Promise<Set<string>>>();
 
 const DEFAULT_PASSAGE_MODE: PassageSearchMode = "keyword";
 const DEFAULT_MAX_MERGED_PASSAGES = 2;
@@ -118,13 +116,16 @@ export async function searchPassages(
   const uuid = options.uuid;
   const citationKey = options.citationKey;
 
-  const allowedUuids = await resolveAllowedUuids(
-    store,
-    options.groupUuid,
-    options.database,
-    uuid,
-    citationKey,
-  );
+  if (store && options.groupUuid) {
+    const scopeGroupUuid = store.getMeta().scope?.groupUuid;
+    if (scopeGroupUuid && scopeGroupUuid !== options.groupUuid) {
+      throw new Error(
+        `Index scope mismatch: current index is scoped to group "${scopeGroupUuid}", not "${options.groupUuid}". Rebuild the index or override --group.`,
+      );
+    }
+  }
+
+  const allowedUuids = resolveAllowedUuids(store, uuid, citationKey);
 
   // UUID / citation-key filter without query: return merged consecutive passages for known document(s)
   if (!query.trim() && (uuid || citationKey)) {
@@ -278,67 +279,20 @@ async function searchSemanticPassages(
   return postProcessPassages(query, candidates, limit, "semantic", perDocLimit);
 }
 
-async function resolveAllowedUuids(
+function resolveAllowedUuids(
   store: VectorStore | null,
-  groupUuid?: string,
-  database?: string,
   uuid?: string,
   citationKey?: string,
-): Promise<Set<string> | undefined> {
-  let allowed: Set<string> | undefined;
+): Set<string> | undefined {
+  if (!store) return undefined;
+  if (uuid) return new Set([uuid]);
+  if (!citationKey) return undefined;
 
-  if (groupUuid) {
-    allowed = await getGroupRecordUuids(groupUuid, database);
-  }
-
-  if (!store) {
-    if (uuid) {
-      return allowed ? intersectUuidSet(allowed, new Set([uuid])) : new Set([uuid]);
-    }
-    return allowed;
-  }
-
-  if (uuid) {
-    const uuidSet = new Set([uuid]);
-    return allowed ? intersectUuidSet(allowed, uuidSet) : uuidSet;
-  }
-
-  if (citationKey) {
-    const citationKeyUuids = new Set<string>();
-    for (const chunk of store.getAllChunks()) {
-      if (chunk.citationKey === citationKey) citationKeyUuids.add(chunk.uuid);
-    }
-    const scoped = allowed
-      ? intersectUuidSet(allowed, citationKeyUuids)
-      : citationKeyUuids;
-    return scoped.size > 0 ? scoped : new Set<string>();
-  }
-
-  return allowed;
-}
-
-function intersectUuidSet(left: Set<string>, right: Set<string>): Set<string> {
   const out = new Set<string>();
-  for (const value of right) {
-    if (left.has(value)) out.add(value);
+  for (const chunk of store.getAllChunks()) {
+    if (chunk.citationKey === citationKey) out.add(chunk.uuid);
   }
-  return out;
-}
-
-async function getGroupRecordUuids(
-  groupUuid: string,
-  database?: string,
-): Promise<Set<string>> {
-  const cacheKey = `${groupUuid}::${database || ""}`;
-  const cached = groupRecordCache.get(cacheKey);
-  if (cached) return cached;
-
-  const loader = (async () => {
-    const records = await dt.listAllRecords(database, groupUuid);
-    return new Set(records.map((record) => record.uuid));
-  })();
-  groupRecordCache.set(cacheKey, loader);
-  return loader;
+  return out.size > 0 ? out : new Set<string>();
 }
 
 function getAllScopedPassages(

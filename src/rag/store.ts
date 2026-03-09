@@ -78,6 +78,10 @@ export interface IndexMeta {
   totalChunks: number;
   totalDocuments: number;
   lastUpdated: string;
+  scope?: {
+    database?: string;
+    groupUuid?: string;
+  };
   /** Per-document tracking for incremental updates */
   documents: Record<
     string,
@@ -135,6 +139,7 @@ export class VectorStore {
       totalChunks: 0,
       totalDocuments: 0,
       lastUpdated: new Date().toISOString(),
+      scope: undefined,
       documents: {},
     };
   }
@@ -383,6 +388,17 @@ export class VectorStore {
     this.chunks = newChunks;
     this.vectorsUsed = keepIndices.length * this.dimensions;
     delete this.meta.documents[uuid];
+  }
+
+  /** Persist the scope used to build this index for later diagnostics. */
+  setScope(scope: { database?: string; groupUuid?: string }): void {
+    this.meta.scope =
+      scope.database || scope.groupUuid
+        ? {
+            ...(scope.database ? { database: scope.database } : {}),
+            ...(scope.groupUuid ? { groupUuid: scope.groupUuid } : {}),
+          }
+        : undefined;
   }
 
   /** Get a copy of the index metadata */

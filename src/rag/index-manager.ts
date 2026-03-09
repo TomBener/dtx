@@ -113,6 +113,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
   if (!force) {
     store.load(); // Load existing index for incremental update
   }
+  store.setScope({ database, groupUuid });
 
   // 2.5 Load citation-key map (optional)
   let citationMap: Map<string, string> | null = null;
