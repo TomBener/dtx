@@ -1,12 +1,13 @@
 /**
  * embedder.ts — Embedding API abstraction layer
  *
- * Supports OpenAI and Google Gemini embedding models.
+ * Supports OpenAI, OpenAI-compatible, and Google Gemini embedding models.
  * Used for building and querying the semantic search index.
  *
  * Configuration via environment variables:
- *   EMBEDDING_PROVIDER = "openai" | "gemini" (default: "gemini")
+ *   EMBEDDING_PROVIDER = "openai" | "openai-compatible" | "gemini" (default: "gemini")
  *   EMBEDDING_MODEL    = model name (optional, uses provider default)
+ *   EMBEDDING_DIMENSIONS = override embedding dimensions for custom models/providers
  *
  * Note: Anthropic does not offer an embedding API.
  * If using Anthropic as your LLM provider, choose OpenAI or Gemini for embeddings.
@@ -28,10 +29,11 @@ export interface Embedder {
   readonly modelName: string;
 }
 
-export type EmbeddingProviderName = "openai" | "gemini";
+export type EmbeddingProviderName = "openai" | "openai-compatible" | "gemini";
 
 const DEFAULT_MODELS: Record<EmbeddingProviderName, string> = {
   openai: "text-embedding-3-small",
+  "openai-compatible": "text-embedding-3-small",
   gemini: "gemini-embedding-001",
 };
 
@@ -49,10 +51,25 @@ class OpenAIEmbedder implements Embedder {
   readonly modelName: string;
   readonly dimensions: number;
 
-  constructor(model?: string) {
-    this.client = new OpenAI();
-    this.modelName = model || DEFAULT_MODELS.openai;
-    this.dimensions = MODEL_DIMENSIONS[this.modelName] || 1536;
+  constructor(
+    provider: "openai" | "openai-compatible",
+    options: { model?: string; baseURL?: string; apiKey?: string } = {},
+  ) {
+    this.client =
+      provider === "openai-compatible"
+        ? new OpenAI({
+            apiKey: options.apiKey || process.env.OPENAI_API_KEY || "dtx",
+            baseURL: options.baseURL,
+          })
+        : new OpenAI({
+            apiKey: options.apiKey,
+            baseURL: options.baseURL,
+          });
+    this.modelName = options.model || DEFAULT_MODELS[provider];
+    this.dimensions =
+      Number(process.env.EMBEDDING_DIMENSIONS) ||
+      MODEL_DIMENSIONS[this.modelName] ||
+      1536;
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
@@ -67,6 +84,20 @@ class OpenAIEmbedder implements Embedder {
     const [embedding] = await this.embedBatch([text]);
     return embedding;
   }
+}
+
+function getOpenAICompatibleBaseURL(): string {
+  const baseURL = process.env.OPENAI_COMPATIBLE_BASE_URL || process.env.OPENAI_BASE_URL;
+  if (!baseURL) {
+    throw new Error(
+      "OPENAI_COMPATIBLE_BASE_URL or OPENAI_BASE_URL is required for openai-compatible embeddings",
+    );
+  }
+  return baseURL;
+}
+
+function getOpenAICompatibleApiKey(): string {
+  return process.env.OPENAI_COMPATIBLE_API_KEY || process.env.OPENAI_API_KEY || "dtx";
 }
 
 // ─── Gemini Embedder ─────────────────────────────────────
@@ -172,14 +203,21 @@ export function getEmbedder(): Embedder {
 
   switch (provider) {
     case "openai":
-      cachedEmbedder = new OpenAIEmbedder(model);
+      cachedEmbedder = new OpenAIEmbedder("openai", { model });
+      break;
+    case "openai-compatible":
+      cachedEmbedder = new OpenAIEmbedder("openai-compatible", {
+        model,
+        baseURL: getOpenAICompatibleBaseURL(),
+        apiKey: getOpenAICompatibleApiKey(),
+      });
       break;
     case "gemini":
       cachedEmbedder = new GeminiEmbedder(model);
       break;
     default:
       throw new Error(
-        `Unsupported EMBEDDING_PROVIDER: "${provider}". Must be "openai" or "gemini".`,
+        `Unsupported EMBEDDING_PROVIDER: "${provider}". Must be "openai", "openai-compatible", or "gemini".`,
       );
   }
 

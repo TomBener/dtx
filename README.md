@@ -16,7 +16,7 @@ An agent-friendly CLI for read-only DEVONthink access with optional semantic ind
 
 - macOS with DEVONthink 4.2+
 - Node.js 20+
-- Gemini or OpenAI key for indexing and `dtx semantic`
+- Gemini, OpenAI, or OpenAI-compatible embeddings for `dtx semantic`
 - `databases/groups/documents` commands and `dtx keyword` do not require embedding API keys
 
 ## Install (Homebrew)
@@ -182,8 +182,11 @@ Set env vars in your shell/profile (or pass inline per command). Important ones:
 
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
 - `GOOGLE_API_KEY` (when `EMBEDDING_PROVIDER=gemini`)
 - `OPENAI_API_KEY` (when `EMBEDDING_PROVIDER=openai`)
+- `OPENAI_BASE_URL` or `OPENAI_COMPATIBLE_BASE_URL` (when `EMBEDDING_PROVIDER=openai-compatible`)
+- `OPENAI_COMPATIBLE_API_KEY` (optional override when `EMBEDDING_PROVIDER=openai-compatible`)
 - `BIBLIOGRAPHY_JSON_PATH`
 - `DT_INDEX_DIR`
 - `DT_DEFAULT_GROUP_UUID`
@@ -208,6 +211,17 @@ export GOOGLE_API_KEY=your_key
 export BIBLIOGRAPHY_JSON_PATH="$HOME/Library/CloudStorage/Dropbox/bibliography/bibliography.json"
 export DT_INDEX_DIR="$HOME/Library/CloudStorage/Dropbox/bibliography/dtx-index"
 export DT_DEFAULT_GROUP_UUID="33203673-B7E2-4F3F-9D87-6E83EB4781EA"
+```
+
+OpenAI-compatible example:
+
+```bash
+export EMBEDDING_PROVIDER=openai-compatible
+export OPENAI_BASE_URL="http://localhost:11434/v1"
+export OPENAI_API_KEY="dtx"
+export EMBEDDING_MODEL="text-embedding-3-small"
+# Set this when the model dimensions are not one of dtx's built-in defaults
+export EMBEDDING_DIMENSIONS=1536
 ```
 
 ## Examples

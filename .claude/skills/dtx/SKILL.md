@@ -129,10 +129,13 @@ Index files: `vectors.bin`, `chunks.json`, `chunks.001.json` …, `meta.json`
 
 | Variable | Purpose |
 |---|---|
-| `EMBEDDING_PROVIDER` | `gemini` (default) or `openai` |
+| `EMBEDDING_PROVIDER` | `gemini` (default), `openai`, or `openai-compatible` |
 | `EMBEDDING_MODEL` | Override embedding model |
+| `EMBEDDING_DIMENSIONS` | Override vector dimensions for custom models/providers |
 | `GOOGLE_API_KEY` | Required for Gemini embeddings |
 | `OPENAI_API_KEY` | Required for OpenAI embeddings |
+| `OPENAI_BASE_URL` / `OPENAI_COMPATIBLE_BASE_URL` | Required for OpenAI-compatible embeddings |
+| `OPENAI_COMPATIBLE_API_KEY` | Optional override key for OpenAI-compatible embeddings |
 | `DT_INDEX_DIR` | Default index directory |
 | `DT_DEFAULT_GROUP_UUID` | Default group scope for search/index commands |
 | `BIBLIOGRAPHY_JSON_PATH` | Default bibliography path |

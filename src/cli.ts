@@ -185,6 +185,8 @@ function getDotEnvDiagnostics(): {
   keys: string[];
   googleApiKey: boolean;
   openaiApiKey: boolean;
+  openaiCompatibleApiKey: boolean;
+  openaiCompatibleBaseURL?: string;
   embeddingProvider?: string;
 } {
   const dotEnvPath = resolve(process.cwd(), ".env");
@@ -197,15 +199,21 @@ function getDotEnvDiagnostics(): {
       typeof parsed.GOOGLE_API_KEY === "string" && parsed.GOOGLE_API_KEY.length > 0,
     openaiApiKey:
       typeof parsed.OPENAI_API_KEY === "string" && parsed.OPENAI_API_KEY.length > 0,
+    openaiCompatibleApiKey:
+      typeof parsed.OPENAI_COMPATIBLE_API_KEY === "string" &&
+      parsed.OPENAI_COMPATIBLE_API_KEY.length > 0,
+    openaiCompatibleBaseURL:
+      parsed.OPENAI_COMPATIBLE_BASE_URL || parsed.OPENAI_BASE_URL || undefined,
     embeddingProvider: parsed.EMBEDDING_PROVIDER || undefined,
   };
 }
 
 function getResolvedSemanticProvider(dotEnv: {
   embeddingProvider?: string;
-}): "gemini" | "openai" {
+}): "gemini" | "openai" | "openai-compatible" {
   const provider = process.env.EMBEDDING_PROVIDER || dotEnv.embeddingProvider || "gemini";
-  return provider === "openai" ? "openai" : "gemini";
+  if (provider === "openai" || provider === "openai-compatible") return provider;
+  return "gemini";
 }
 
 function buildVersionInfo(): Record<string, unknown> {
@@ -224,8 +232,19 @@ function buildDoctorInfo(indexDir?: string): Record<string, unknown> {
   const provider = getResolvedSemanticProvider(dotEnv);
   const processGoogle = Boolean(process.env.GOOGLE_API_KEY);
   const processOpenAI = Boolean(process.env.OPENAI_API_KEY);
+  const processOpenAICompatibleApiKey = Boolean(
+    process.env.OPENAI_COMPATIBLE_API_KEY || process.env.OPENAI_API_KEY,
+  );
+  const processOpenAICompatibleBaseURL = Boolean(
+    process.env.OPENAI_COMPATIBLE_BASE_URL || process.env.OPENAI_BASE_URL,
+  );
   const semanticReadyFromProcessEnv =
-    provider === "gemini" ? processGoogle : processOpenAI;
+    provider === "gemini"
+      ? processGoogle
+      : provider === "openai-compatible"
+        ? processOpenAICompatibleBaseURL &&
+          (processOpenAICompatibleApiKey || Boolean(process.env.OPENAI_BASE_URL))
+        : processOpenAI;
   const status = getIndexStatus(indexDir);
   const resolvedIndexDir = getIndexDir(indexDir);
 
@@ -236,6 +255,8 @@ function buildDoctorInfo(indexDir?: string): Record<string, unknown> {
       readyFromProcessEnv: semanticReadyFromProcessEnv,
       googleApiKeyInProcessEnv: processGoogle,
       openaiApiKeyInProcessEnv: processOpenAI,
+      openaiCompatibleApiKeyInProcessEnv: processOpenAICompatibleApiKey,
+      openaiCompatibleBaseURLInProcessEnv: processOpenAICompatibleBaseURL,
       note:
         dotEnv.found && !semanticReadyFromProcessEnv
           ? "A .env file exists in cwd, but dtx does not auto-load .env; export env vars before running."
