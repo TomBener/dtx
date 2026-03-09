@@ -23,17 +23,9 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
+import { resolveConfiguredPath, loadConfig } from "../config.js";
 
 // ─── Paths ───────────────────────────────────────────────
-
-const DEFAULT_INDEX_DIR = resolve(
-  homedir(),
-  "Library",
-  "CloudStorage",
-  "Dropbox",
-  "bibliography",
-  "dtx-index",
-);
 
 interface IndexPaths {
   indexDir: string;
@@ -43,7 +35,13 @@ interface IndexPaths {
 }
 
 function resolveIndexPaths(indexDir?: string): IndexPaths {
-  const raw = indexDir || process.env.DT_INDEX_DIR || DEFAULT_INDEX_DIR;
+  const raw = indexDir || resolveConfiguredPath(["DT_INDEX_DIR"], "indexDir");
+  if (!raw) {
+    const configPath = loadConfig().path;
+    throw new Error(
+      `Index directory is not configured. Set --index-dir, DT_INDEX_DIR, or ~/.dtx/config.json (current path: ${configPath}).`,
+    );
+  }
   const dir =
     raw === "~"
       ? homedir()
@@ -447,8 +445,12 @@ function cosineSimilarity(
 
 /** Check if an index exists on disk */
 export function indexExists(indexDir?: string): boolean {
-  const p = resolveIndexPaths(indexDir);
-  return existsSync(p.metaPath) && existsSync(p.vectorsPath);
+  try {
+    const p = resolveIndexPaths(indexDir);
+    return existsSync(p.metaPath) && existsSync(p.vectorsPath);
+  } catch {
+    return false;
+  }
 }
 
 /** Get index directory path */

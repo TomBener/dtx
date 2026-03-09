@@ -7,8 +7,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { resolveConfiguredPath } from "../config.js";
 
 interface BibliographyItem {
   id?: string;
@@ -50,18 +49,6 @@ export interface CitationMapLoadResult {
   pathsByCitationKey: Map<string, string[]>;
 }
 
-/** Default bibliography path: ~/Library/CloudStorage/Dropbox/bibliography/bibliography.json */
-export function getDefaultBibliographyPath(): string {
-  return resolve(
-    homedir(),
-    "Library",
-    "CloudStorage",
-    "Dropbox",
-    "bibliography",
-    "bibliography.json",
-  );
-}
-
 /** Normalize path for robust matching (Unicode + slash + /private prefix on macOS). */
 export function normalizePathForLookup(path: string): string {
   let p = path.trim().normalize("NFC").replace(/\\/g, "/");
@@ -76,8 +63,8 @@ export function normalizePathForLookup(path: string): string {
 export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResult | null {
   const path =
     bibliographyPath ||
-    process.env.BIBLIOGRAPHY_JSON_PATH ||
-    getDefaultBibliographyPath();
+    resolveConfiguredPath(["BIBLIOGRAPHY_JSON_PATH"], "bibliographyJsonPath");
+  if (!path) return null;
   if (!existsSync(path)) return null;
 
   const raw = readFileSync(path, "utf-8");

@@ -14,6 +14,17 @@ description: >
 
 `dtx` is a read-only CLI for DEVONthink. All output is JSON on stdout; progress logs go to stderr. It is designed for AI agents: structured, predictable, composable.
 
+Global config file:
+
+```bash
+~/.dtx/config.json
+```
+
+Priority order for user-facing configuration:
+1. CLI flags
+2. Environment variables
+3. `~/.dtx/config.json`
+
 ## Two Retrieval Modes
 
 There are two fundamentally different retrieval modes. Choose based on what the user needs:
@@ -121,7 +132,7 @@ Progress logs (indexing, etc.) are written to stderr, not stdout.
 Priority order for index directory:
 1. `--index-dir <path>`
 2. `DT_INDEX_DIR` environment variable
-3. `~/Library/CloudStorage/Dropbox/bibliography/dtx-index` (default)
+3. `~/.dtx/config.json:indexDir`
 
 Index files: `vectors.bin`, `chunks.json`, `chunks.001.json` …, `meta.json`
 

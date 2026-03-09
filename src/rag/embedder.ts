@@ -4,10 +4,10 @@
  * Supports OpenAI, OpenAI-compatible, and Google Gemini embedding models.
  * Used for building and querying the semantic search index.
  *
- * Configuration via environment variables:
- *   EMBEDDING_PROVIDER = "openai" | "openai-compatible" | "gemini" (default: "gemini")
- *   EMBEDDING_MODEL    = model name (optional, uses provider default)
- *   EMBEDDING_DIMENSIONS = override embedding dimensions for custom models/providers
+ * Configuration via ~/.dtx/config.json or environment variables:
+ *   EMBEDDING_PROVIDER = "openai" | "openai-compatible" | "gemini"
+ *   EMBEDDING_MODEL    = model name
+ *   EMBEDDING_DIMENSIONS = optional override dimensions for custom models/providers
  *
  * Note: Anthropic does not offer an embedding API.
  * If using Anthropic as your LLM provider, choose OpenAI or Gemini for embeddings.
@@ -15,6 +15,7 @@
 
 import OpenAI from "openai";
 import { GoogleGenerativeAI, TaskType } from "@google/generative-ai";
+import { resolveConfiguredNumber, resolveConfiguredString } from "../config.js";
 
 // ─── Interface ───────────────────────────────────────────
 
@@ -30,12 +31,6 @@ export interface Embedder {
 }
 
 export type EmbeddingProviderName = "openai" | "openai-compatible" | "gemini";
-
-const DEFAULT_MODELS: Record<EmbeddingProviderName, string> = {
-  openai: "text-embedding-3-small",
-  "openai-compatible": "text-embedding-3-small",
-  gemini: "gemini-embedding-001",
-};
 
 const MODEL_DIMENSIONS: Record<string, number> = {
   "text-embedding-3-small": 1536,
@@ -58,16 +53,19 @@ class OpenAIEmbedder implements Embedder {
     this.client =
       provider === "openai-compatible"
         ? new OpenAI({
-            apiKey: options.apiKey || process.env.OPENAI_API_KEY || "dtx",
+            apiKey: options.apiKey,
             baseURL: options.baseURL,
           })
         : new OpenAI({
             apiKey: options.apiKey,
             baseURL: options.baseURL,
           });
-    this.modelName = options.model || DEFAULT_MODELS[provider];
+    this.modelName = options.model || "";
+    if (!this.modelName) {
+      throw new Error("EMBEDDING_MODEL is required for OpenAI embeddings");
+    }
     this.dimensions =
-      Number(process.env.EMBEDDING_DIMENSIONS) ||
+      resolveConfiguredNumber(["EMBEDDING_DIMENSIONS"], "embeddingDimensions") ||
       MODEL_DIMENSIONS[this.modelName] ||
       1536;
   }
@@ -87,7 +85,11 @@ class OpenAIEmbedder implements Embedder {
 }
 
 function getOpenAICompatibleBaseURL(): string {
-  const baseURL = process.env.OPENAI_COMPATIBLE_BASE_URL || process.env.OPENAI_BASE_URL;
+  const baseURL =
+    resolveConfiguredString(
+      ["OPENAI_COMPATIBLE_BASE_URL", "OPENAI_BASE_URL"],
+      "openaiCompatibleBaseUrl",
+    ) || resolveConfiguredString(["OPENAI_BASE_URL"], "openaiBaseUrl");
   if (!baseURL) {
     throw new Error(
       "OPENAI_COMPATIBLE_BASE_URL or OPENAI_BASE_URL is required for openai-compatible embeddings",
@@ -97,7 +99,14 @@ function getOpenAICompatibleBaseURL(): string {
 }
 
 function getOpenAICompatibleApiKey(): string {
-  return process.env.OPENAI_COMPATIBLE_API_KEY || process.env.OPENAI_API_KEY || "dtx";
+  return (
+    resolveConfiguredString(
+      ["OPENAI_COMPATIBLE_API_KEY", "OPENAI_API_KEY"],
+      "openaiCompatibleApiKey",
+    ) ||
+    resolveConfiguredString(["OPENAI_API_KEY"], "openaiApiKey") ||
+    ""
+  );
 }
 
 // ─── Gemini Embedder ─────────────────────────────────────
@@ -108,11 +117,17 @@ class GeminiEmbedder implements Embedder {
   readonly dimensions: number;
 
   constructor(model?: string) {
-    const key = process.env.GOOGLE_API_KEY;
+    const key = resolveConfiguredString(["GOOGLE_API_KEY"], "googleApiKey");
     if (!key) throw new Error("GOOGLE_API_KEY is required for Gemini embeddings");
     this.genAI = new GoogleGenerativeAI(key);
-    this.modelName = model || DEFAULT_MODELS.gemini;
-    this.dimensions = MODEL_DIMENSIONS[this.modelName] || 3072;
+    this.modelName = model || "";
+    if (!this.modelName) {
+      throw new Error("EMBEDDING_MODEL is required for Gemini embeddings");
+    }
+    this.dimensions =
+      resolveConfiguredNumber(["EMBEDDING_DIMENSIONS"], "embeddingDimensions") ||
+      MODEL_DIMENSIONS[this.modelName] ||
+      3072;
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
@@ -198,8 +213,17 @@ let cachedEmbedder: Embedder | null = null;
 export function getEmbedder(): Embedder {
   if (cachedEmbedder) return cachedEmbedder;
 
-  const provider = (process.env.EMBEDDING_PROVIDER || "gemini") as EmbeddingProviderName;
-  const model = process.env.EMBEDDING_MODEL || undefined;
+  const provider = resolveConfiguredString(
+    ["EMBEDDING_PROVIDER"],
+    "embeddingProvider",
+  ) as EmbeddingProviderName | undefined;
+  const model = resolveConfiguredString(["EMBEDDING_MODEL"], "embeddingModel");
+
+  if (!provider) {
+    throw new Error(
+      "EMBEDDING_PROVIDER is not configured. Set ~/.dtx/config.json or process env.",
+    );
+  }
 
   switch (provider) {
     case "openai":

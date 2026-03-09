@@ -10,11 +10,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as dt from "./bridge/devonthink.js";
+import { loadConfig, resolveConfiguredPath, resolveConfiguredString } from "./config.js";
 import { buildIndex, getIndexStatus } from "./rag/index-manager.js";
 import { resetStoreCache, searchPassages } from "./rag/passage-search.js";
 import { getIndexDir } from "./rag/store.js";
 
-const DEFAULT_GROUP_UUID = "33203673-B7E2-4F3F-9D87-6E83EB4781EA";
 const CLI_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_JSON_PATH = resolve(CLI_DIR, "..", "package.json");
 
@@ -122,7 +122,7 @@ function getEffectiveGroupUuid(flags: Record<string, FlagValue>): string | undef
   if (hasFlag(flags, "database")) {
     return undefined;
   }
-  return process.env.DT_DEFAULT_GROUP_UUID || DEFAULT_GROUP_UUID;
+  return resolveConfiguredString(["DT_DEFAULT_GROUP_UUID"], "defaultGroupUuid");
 }
 
 function toIndexDir(flags: Record<string, FlagValue>): string {
@@ -208,12 +208,29 @@ function getDotEnvDiagnostics(): {
   };
 }
 
+function getConfigDiagnostics(): {
+  found: boolean;
+  path: string;
+  keys: string[];
+} {
+  const loaded = loadConfig();
+  return {
+    found: loaded.found,
+    path: loaded.path,
+    keys: Object.keys(loaded.config).sort(),
+  };
+}
+
 function getResolvedSemanticProvider(dotEnv: {
   embeddingProvider?: string;
-}): "gemini" | "openai" | "openai-compatible" {
-  const provider = process.env.EMBEDDING_PROVIDER || dotEnv.embeddingProvider || "gemini";
+}): "gemini" | "openai" | "openai-compatible" | undefined {
+  const provider =
+    resolveConfiguredString(["EMBEDDING_PROVIDER"], "embeddingProvider") ||
+    dotEnv.embeddingProvider;
+  if (!provider) return undefined;
   if (provider === "openai" || provider === "openai-compatible") return provider;
-  return "gemini";
+  if (provider === "gemini") return "gemini";
+  return undefined;
 }
 
 function buildVersionInfo(): Record<string, unknown> {
@@ -244,14 +261,19 @@ function buildDoctorInfo(indexDir?: string): Record<string, unknown> {
       : provider === "openai-compatible"
         ? processOpenAICompatibleBaseURL &&
           (processOpenAICompatibleApiKey || Boolean(process.env.OPENAI_BASE_URL))
-        : processOpenAI;
+        : provider === "openai"
+          ? processOpenAI
+          : false;
   const status = getIndexStatus(indexDir);
-  const resolvedIndexDir = getIndexDir(indexDir);
+  const resolvedIndexDir =
+    indexDir || resolveConfiguredPath(["DT_INDEX_DIR"], "indexDir") || undefined;
+  const config = getConfigDiagnostics();
 
   return {
     ...buildVersionInfo(),
+    config,
     semantic: {
-      provider,
+      provider: provider || null,
       readyFromProcessEnv: semanticReadyFromProcessEnv,
       googleApiKeyInProcessEnv: processGoogle,
       openaiApiKeyInProcessEnv: processOpenAI,
@@ -262,7 +284,7 @@ function buildDoctorInfo(indexDir?: string): Record<string, unknown> {
           ? "A .env file exists in cwd, but dtx does not auto-load .env; export env vars before running."
           : undefined,
     },
-    dotEnv,
+    ...(dotEnv.found ? { dotEnv } : {}),
     index: status
       ? {
           available: true,
@@ -297,11 +319,11 @@ function printHelp(): void {
 Notes:
   - Default output is JSON (stdout)
   - Progress logs are emitted on stderr
-  - Default search/index group: ${process.env.DT_DEFAULT_GROUP_UUID || DEFAULT_GROUP_UUID}
-  - Passing --database disables the default group unless --group is also provided
+  - Default search/index group comes from ~/.dtx/config.json or DT_DEFAULT_GROUP_UUID
+  - Passing --database disables the configured group unless --group is also provided
   - Markdown files are excluded by default; use --include-md to include them
   - content-max-length default: no truncation (set a positive number to cap content)
-  - Index directory priority: --index-dir > DT_INDEX_DIR > ~/Library/CloudStorage/Dropbox/bibliography/dtx-index
+  - Index directory priority: --index-dir > DT_INDEX_DIR > ~/.dtx/config.json:indexDir
 `);
 }
 

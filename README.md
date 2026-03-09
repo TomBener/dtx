@@ -39,6 +39,33 @@ npm run build
 npm link
 ```
 
+## Configuration File
+
+`dtx` now supports a global config file at:
+
+```bash
+~/.dtx/config.json
+```
+
+Priority order for user-facing configuration is:
+
+1. CLI flags
+2. Environment variables
+3. `~/.dtx/config.json`
+
+Example:
+
+```json
+{
+  "defaultGroupUuid": "33203673-B7E2-4F3F-9D87-6E83EB4781EA",
+  "indexDir": "~/Library/CloudStorage/Dropbox/bibliography/dtx-index",
+  "bibliographyJsonPath": "~/Library/CloudStorage/Dropbox/bibliography/bibliography.json",
+  "embeddingProvider": "gemini",
+  "embeddingModel": "gemini-embedding-001",
+  "googleApiKey": "..."
+}
+```
+
 ## Output Contract
 
 - `stdout`: JSON response
@@ -138,7 +165,7 @@ Priority order:
 
 1. `--index-dir <path>`
 2. `DT_INDEX_DIR` (env)
-3. `~/Library/CloudStorage/Dropbox/bibliography/dtx-index` (default)
+3. `~/.dtx/config.json:indexDir`
 
 Index files:
 
@@ -158,9 +185,9 @@ dtx index build \
 
 Defaults for `dtx index build`:
 
-- Group UUID: `33203673-B7E2-4F3F-9D87-6E83EB4781EA` (or `DT_DEFAULT_GROUP_UUID`)
-- Database: omitted by default; passing `--database` disables the default group unless `--group` is also provided
-- Bibliography path: `~/Library/CloudStorage/Dropbox/bibliography/bibliography.json` (or `BIBLIOGRAPHY_JSON_PATH` env)
+- Group UUID: configure via `~/.dtx/config.json:defaultGroupUuid` or `DT_DEFAULT_GROUP_UUID`
+- Database: omitted by default; passing `--database` disables the configured group unless `--group` is also provided
+- Bibliography path: configure via `~/.dtx/config.json:bibliographyJsonPath` or `BIBLIOGRAPHY_JSON_PATH`
 - Markdown files are excluded unless `--include-md` is provided
 - `--content-max-length` defaults to no truncation (`0` also means no truncation)
 - Semantic chunking defaults to `800` chars with `120` chars of overlap
@@ -168,7 +195,7 @@ Defaults for `dtx index build`:
 
 `dtx semantic` requires a local index (`dtx index build`):
 
-- By default, semantic retrieval is limited to group `33203673-B7E2-4F3F-9D87-6E83EB4781EA` (or `DT_DEFAULT_GROUP_UUID`)
+- By default, semantic retrieval uses the configured group from `~/.dtx/config.json` or `DT_DEFAULT_GROUP_UUID`
 - By default, results return only `excerpt`; pass `--context` to also include `contextText`
 - By default, at most 2 passages per document are returned; use `--per-doc <n>` to change (0 for no cap)
 - Pass `--debug` to include internal ranking and passage-location fields
@@ -178,7 +205,7 @@ Defaults for `dtx index build`:
 
 ## Configuration (Environment Variables)
 
-Set env vars in your shell/profile (or pass inline per command). Important ones:
+Set env vars in your shell/profile (or pass inline per command), or put equivalent values in `~/.dtx/config.json`. Important ones:
 
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`

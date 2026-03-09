@@ -14,6 +14,7 @@ import { getEmbedder, type Embedder } from "./embedder.js";
 import { chunkDocument, type DocumentInput } from "./chunker.js";
 import { VectorStore, indexExists, type IndexMeta, type ChunkMeta } from "./store.js";
 import { loadCitationMap, resolveCitationKey } from "./citation-map.js";
+import { resolveConfiguredString } from "../config.js";
 import * as dt from "../bridge/devonthink.js";
 
 // ─── Types ───────────────────────────────────────────────
@@ -106,7 +107,7 @@ export async function buildIndex(options: IndexOptions = {}): Promise<IndexStats
   // 2. Load or create vector store
   const store = new VectorStore(
     embedder.dimensions,
-    process.env.EMBEDDING_PROVIDER || "gemini",
+    resolveConfiguredString(["EMBEDDING_PROVIDER"], "embeddingProvider") || "unknown",
     embedder.modelName,
     indexDir,
   );
