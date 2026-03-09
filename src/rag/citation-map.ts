@@ -15,6 +15,11 @@ interface BibliographyItem {
   file?: string;
   type?: string;
   title?: string;
+  editor?: Array<{
+    family?: string;
+    given?: string;
+    literal?: string;
+  }>;
   author?: Array<{
     family?: string;
     given?: string;
@@ -97,7 +102,7 @@ export function loadCitationMap(bibliographyPath?: string): CitationMapLoadResul
       const normalized = normalizePathForLookup(filePath);
       const metadata: BibliographyMetadata = {
         citationKey,
-        author: formatAuthors(item.author),
+        author: formatNames(item.author) || formatNames(item.editor),
         year: extractYear(item.issued),
         title:
           typeof item.title === "string" ? item.title.trim() || undefined : undefined,
@@ -203,18 +208,18 @@ function splitBibliographyFilePaths(file: string | undefined): string[] {
     .filter((part) => part.length > 0);
 }
 
-function formatAuthors(
-  authors: Array<{ family?: string; given?: string; literal?: string }> | undefined,
+function formatNames(
+  people: Array<{ family?: string; given?: string; literal?: string }> | undefined,
 ): string | undefined {
-  if (!Array.isArray(authors) || authors.length === 0) return undefined;
-  const names = authors
-    .map((author) => {
-      if (typeof author.literal === "string" && author.literal.trim()) {
-        return author.literal.trim();
+  if (!Array.isArray(people) || people.length === 0) return undefined;
+  const names = people
+    .map((person) => {
+      if (typeof person.literal === "string" && person.literal.trim()) {
+        return person.literal.trim();
       }
-      const family = (author.family || "").trim();
-      const given = (author.given || "").trim();
-      if (family && given) return `${family}, ${given}`;
+      const family = (person.family || "").trim();
+      const given = (person.given || "").trim();
+      if (family && given) return `${family} ${given}`;
       return family || given || "";
     })
     .filter((name) => name.length > 0);

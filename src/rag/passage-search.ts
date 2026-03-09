@@ -7,6 +7,7 @@
  *   - semantic: cosine similarity search, re-ranked with lexical signals
  */
 
+import { getMetadataForCitationKey, loadCitationMap } from "./citation-map.js";
 import { getEmbedder } from "./embedder.js";
 import { VectorStore, getIndexDir, indexExists } from "./store.js";
 
@@ -38,11 +39,15 @@ export interface PassageSearchOptions {
 }
 
 export interface PassageSearchResult {
+  citationKey?: string;
+  author?: string;
+  year?: string;
+  title?: string;
+  publicationType?: string;
   uuid: string;
   docName: string;
   excerpt: string;
   score: number;
-  citationKey?: string;
   contextText?: string;
   database?: string;
   passageIndex?: number;
@@ -764,24 +769,40 @@ function toPublicPassageResults(
   includeContext: boolean,
   debug: boolean,
 ): PassageSearchResult[] {
-  return results.map((result) => ({
-    uuid: result.uuid,
-    docName: result.docName,
-    excerpt: result.excerpt,
-    score: result.score,
-    citationKey: result.citationKey,
-    ...(includeContext ? { contextText: result.contextText } : {}),
-    ...(debug
-      ? {
-          database: result.database,
-          passageIndex: result.passageIndex,
-          passageIndexStart: result.passageIndexStart,
-          passageIndexEnd: result.passageIndexEnd,
-          mergedPassageCount: result.mergedPassageCount,
-          documentScore: result.documentScore,
-          passageScore: result.passageScore,
-          mode: result.mode,
-        }
-      : {}),
-  }));
+  const bibliography = loadCitationMap();
+  return results.map((result) => {
+    const metadata = getMetadataForCitationKey(
+      bibliography?.metadataByCitationKey ?? null,
+      result.citationKey,
+    );
+
+    return {
+      ...(result.citationKey ? { citationKey: result.citationKey } : {}),
+      ...(metadata?.author ? { author: metadata.author } : {}),
+      ...(metadata?.year ? { year: metadata.year } : {}),
+      ...(metadata?.title
+        ? { title: metadata.title }
+        : result.docName
+          ? { title: result.docName }
+          : {}),
+      ...(metadata?.publicationType ? { publicationType: metadata.publicationType } : {}),
+      uuid: result.uuid,
+      docName: result.docName,
+      excerpt: result.excerpt,
+      score: result.score,
+      ...(includeContext ? { contextText: result.contextText } : {}),
+      ...(debug
+        ? {
+            database: result.database,
+            passageIndex: result.passageIndex,
+            passageIndexStart: result.passageIndexStart,
+            passageIndexEnd: result.passageIndexEnd,
+            mergedPassageCount: result.mergedPassageCount,
+            documentScore: result.documentScore,
+            passageScore: result.passageScore,
+            mode: result.mode,
+          }
+        : {}),
+    };
+  });
 }
