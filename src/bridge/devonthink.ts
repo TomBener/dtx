@@ -263,10 +263,7 @@ export async function getDocumentContent(
   return formatDocumentContentResult(enriched);
 }
 
-export async function getDocumentCitationKey(
-  uuid: string,
-  bibliographyPath?: string,
-) {
+export async function getDocumentCitationKey(uuid: string, bibliographyPath?: string) {
   const data = await runJXAJSON<RawRecordMetadataResult>(getRecordMetadataScript(uuid));
   const bibliography = loadBibliographyOrThrow(bibliographyPath);
   const enriched = enrichWithBibliography(data, bibliography, {
