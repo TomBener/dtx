@@ -311,7 +311,8 @@ function printHelp(): void {
   dtx semantic [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] [--per-doc <n>] [--context] [--debug] [--index-dir <path>] [--citation-key <key>] [--uuid <recordUuid>]
   dtx databases list
   dtx groups list [--uuid <groupUuid>] [--limit <n>]
-  dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
+  dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>] [--bib <path>]
+  dtx documents citation-key --uuid <recordUuid> [--bib <path>]
   dtx documents related --uuid <recordUuid> [--limit <n>]
   dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
   dtx index status [--index-dir <path>]
@@ -425,6 +426,7 @@ async function run(): Promise<never> {
     if (namespace === "documents" && action === "get") {
       const uuid = getStringFlag(parsed.flags, "uuid") || rest[0];
       const citationKey = getStringFlag(parsed.flags, "citation-key");
+      const bibliographyPath = getStringFlag(parsed.flags, "bib", "bibliography");
       if (uuid && citationKey) {
         emitError(
           "INVALID_ARGUMENT",
@@ -439,13 +441,27 @@ async function run(): Promise<never> {
       }
       const maxLength = getNumberFlag(parsed.flags, "max-length");
       if (citationKey) {
-        const data = await dt.getDocumentContentByCitationKey(citationKey, maxLength);
+        const data = await dt.getDocumentContentByCitationKey(
+          citationKey,
+          maxLength,
+          bibliographyPath,
+        );
         emitOk(data, commonMeta());
       }
       if (!uuid) {
         emitError("MISSING_ARGUMENT", "Missing required argument: --uuid <recordUuid>");
       }
-      const data = await dt.getDocumentContent(uuid, maxLength);
+      const data = await dt.getDocumentContent(uuid, maxLength, bibliographyPath);
+      emitOk(data, commonMeta());
+    }
+
+    if (namespace === "documents" && action === "citation-key") {
+      const uuid = getStringFlag(parsed.flags, "uuid") || rest[0];
+      if (!uuid) {
+        emitError("MISSING_ARGUMENT", "Missing required argument: --uuid <recordUuid>");
+      }
+      const bibliographyPath = getStringFlag(parsed.flags, "bib", "bibliography");
+      const data = await dt.getDocumentCitationKey(uuid, bibliographyPath);
       emitOk(data, commonMeta());
     }
 

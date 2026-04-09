@@ -106,7 +106,8 @@ dtx semantic [--query "<q>"] [--database <name>] [--group <uuid>] [--limit <n>] 
 dtx databases list
 dtx groups list [--uuid <groupUuid>] [--limit <n>]
 
-dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>]
+dtx documents get (--uuid <recordUuid> | --citation-key <key>) [--max-length <n>] [--bib <path>]
+dtx documents citation-key --uuid <recordUuid> [--bib <path>]
 dtx documents related --uuid <recordUuid> [--limit <n>]
 
 dtx index build [--database <name>] [--group <uuid>] [--include-md] [--force] [--bib <path>] [--index-dir <path>] [--content-max-length <n>]
@@ -125,6 +126,7 @@ Passes the query directly to DEVONthink's search engine and returns document-lev
 - `--limit` defaults to `10`
 - Abstracts are included in results by default; `--abstract` is accepted for explicitness
 - `dtx documents get` accepts either a DEVONthink `--uuid` or a bibliographic `--citation-key`
+- `dtx documents citation-key --uuid <recordUuid>` resolves the mapped citation key without reading document content
 - Bibliographic enrichment is sourced from `bibliography.json`
 
 **2. Local index retrieval** (`dtx semantic`)
@@ -262,6 +264,11 @@ dtx semantic --query "pastoral nostalgia urban escape" --limit 8
 
 # Read a specific paper by citation key from the semantic index
 dtx semantic --citation-key "shucksmith2018rrr" --limit 20
+
+# Resolve a citation key from a DEVONthink UUID
+dtx documents citation-key \
+  --uuid "A1B2C3D4-E5F6-7890-1234-56789ABCDEF0" \
+  --bib ~/Library/CloudStorage/Dropbox/bibliography/bibliography.json
 ```
 
 ## Safety

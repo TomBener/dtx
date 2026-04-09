@@ -104,4 +104,23 @@ export function getRecordContentScript(uuid: string, maxLength?: number): string
 })()`;
 }
 
+/** Read record metadata only. Used for cheap UUID-based bibliography lookups. */
+export function getRecordMetadataScript(uuid: string): string {
+  const u = escapeForJXA(uuid);
+  return `(() => {
+  const app = Application("DEVONthink");
+  const r = app.getRecordWithUuid(${u});
+  if (!r) return JSON.stringify({error: "Record not found"});
+
+  let filePath = "";
+  try { filePath = r.path() || ""; } catch(e) {}
+
+  return JSON.stringify({
+    uuid: r.uuid(),
+    recordType: r.recordType(),
+    path: filePath,
+  });
+})()`;
+}
+
 // Note: The dtx CLI only exposes read-only operations.

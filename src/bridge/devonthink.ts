@@ -9,7 +9,7 @@
 
 import { runJXAJSON } from "./executor.js";
 import { searchScript, getRelatedScript } from "./scripts/search.js";
-import { getRecordContentScript } from "./scripts/records.js";
+import { getRecordContentScript, getRecordMetadataScript } from "./scripts/records.js";
 import {
   listDatabasesScript,
   listGroupContentsScript,
@@ -66,6 +66,12 @@ interface RawDocumentContentResult {
   path?: string;
 }
 
+interface RawRecordMetadataResult {
+  uuid: string;
+  recordType: string;
+  path?: string;
+}
+
 interface DocumentContentResult {
   citationKey?: string;
   author?: string;
@@ -80,6 +86,18 @@ interface DocumentContentResult {
   truncated: boolean;
   totalLength: number;
   wordCount: number;
+  path?: string;
+}
+
+interface DocumentCitationLookupResult {
+  citationKey: string;
+  author?: string;
+  year?: string;
+  title?: string;
+  publicationType?: string;
+  abstract?: string;
+  uuid: string;
+  fileType: string;
   path?: string;
 }
 
@@ -172,6 +190,40 @@ function formatDocumentContentResult(
   };
 }
 
+function formatDocumentCitationLookupResult(
+  result: RawRecordMetadataResult & {
+    citationKey: string;
+    author?: string;
+    year?: string;
+    title?: string;
+    publicationType?: string;
+    abstract?: string;
+  },
+): DocumentCitationLookupResult {
+  return {
+    citationKey: result.citationKey,
+    ...(result.author ? { author: result.author } : {}),
+    ...(result.year ? { year: result.year } : {}),
+    ...(result.title ? { title: result.title } : {}),
+    ...(result.publicationType ? { publicationType: result.publicationType } : {}),
+    ...(result.abstract ? { abstract: result.abstract } : {}),
+    uuid: result.uuid,
+    fileType: result.recordType,
+    ...(result.path ? { path: result.path } : {}),
+  };
+}
+
+function loadBibliographyOrThrow(bibliographyPath?: string): CitationMapLoadResult {
+  const bibliography = loadCitationMap(bibliographyPath);
+  if (bibliography) return bibliography;
+  if (bibliographyPath) {
+    throw new Error(`Bibliography JSON not found: ${bibliographyPath}`);
+  }
+  throw new Error(
+    "Bibliography JSON not found or not configured. Set BIBLIOGRAPHY_JSON_PATH, ~/.dtx/config.json:bibliographyJsonPath, or pass --bib <path>.",
+  );
+}
+
 // ─── Read-Only Operations ────────────────────────────────
 
 export async function searchDocuments(
@@ -211,12 +263,34 @@ export async function getDocumentContent(
   return formatDocumentContentResult(enriched);
 }
 
+export async function getDocumentCitationKey(
+  uuid: string,
+  bibliographyPath?: string,
+) {
+  const data = await runJXAJSON<RawRecordMetadataResult>(getRecordMetadataScript(uuid));
+  const bibliography = loadBibliographyOrThrow(bibliographyPath);
+  const enriched = enrichWithBibliography(data, bibliography, {
+    includeAbstract: true,
+  });
+
+  if (!enriched.citationKey) {
+    throw new Error(
+      `Citation key not found for DEVONthink record: ${uuid}${data.path ? ` (${data.path})` : ""}`,
+    );
+  }
+
+  return formatDocumentCitationLookupResult({
+    ...enriched,
+    citationKey: enriched.citationKey,
+  });
+}
+
 export async function getDocumentContentByCitationKey(
   citationKey: string,
   maxLength?: number,
   bibliographyPath?: string,
 ) {
-  const bibliography = loadCitationMap(bibliographyPath);
+  const bibliography = loadBibliographyOrThrow(bibliographyPath);
   const paths = getPathsForCitationKey(
     bibliography?.pathsByCitationKey ?? null,
     citationKey,
